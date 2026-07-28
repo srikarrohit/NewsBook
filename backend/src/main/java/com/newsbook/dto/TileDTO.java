@@ -6,6 +6,8 @@ public class TileDTO {
     private String name;
     private String image;
     private Integer priority;
+    private String state;
+    private String district;
 
     public TileDTO() {}
 
@@ -14,11 +16,17 @@ public class TileDTO {
     }
 
     public TileDTO(Long id, String tileId, String name, String image, Integer priority) {
+        this(id, tileId, name, image, priority, null, null);
+    }
+
+    public TileDTO(Long id, String tileId, String name, String image, Integer priority, String state, String district) {
         this.id = id;
         this.tileId = tileId;
         this.name = name;
         this.image = image;
         this.priority = priority;
+        this.state = state;
+        this.district = district;
     }
 
     public Long getId() {
@@ -59,5 +67,21 @@ public class TileDTO {
 
     public void setPriority(Integer priority) {
         this.priority = priority;
+    }
+
+    public String getDistrict() {
+        return district;
+    }
+
+    public void setDistrict(String district) {
+        this.district = district;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public void setState(String state) {
+        this.state = state;
     }
 }

@@ -10,9 +10,17 @@ import { useAds } from '../../context/AdsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTiles } from '../../context/TileContext';
 import { normalizeRole } from '../../constants/roleUtils';
+import { IMAGE_ASPECT } from '../../constants/imageAspect';
 
 const BACKEND_URL = API_BASE_URL; // central API base URL
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
+const MAX_WORDS = 80;
+const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
+const formatImageUrl = (image) => {
+  if (!image) return null;
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `${BACKEND_URL}${image.startsWith('/') ? '' : '/'}${image}`;
+};
 
 export default function PostPage() {
   let { tileId } = useLocalSearchParams();
@@ -25,10 +33,14 @@ export default function PostPage() {
 
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { addPost, getPostsByTile } = useTiles();
-  const { addAd, getAdsByTile } = useAds();
+  const { addPost, updatePost, getPostsByTile, getTileById, updateTile } = useTiles();
+  const { addAd, updateAd, getAdsByTile, trackAdView, trackAdClick } = useAds();
+  const viewedAdIdsRef = useRef(new Set());
   const [content, setContent] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [existingImageUrl, setExistingImageUrl] = useState(null);
+  const [editingItem, setEditingItem] = useState(null); // { type: 'post' | 'ad', id }
+  const [selectedGridImage, setSelectedGridImage] = useState(null);
   const [showPosts, setShowPosts] = useState(false);
   const [dismissedPostIds, setDismissedPostIds] = useState([]);
   const [currentPostIndex, setCurrentPostIndex] = useState(0);
@@ -86,7 +98,7 @@ export default function PostPage() {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [16, 9],
+        aspect: IMAGE_ASPECT,
         quality: 1,
       });
 
@@ -98,43 +110,106 @@ export default function PostPage() {
     }
   };
 
-  // Modified handlePost to upload image before creating post/ad
+  const composerWordCount = countWords(isAdMode ? adContent : content);
+  const isEditing = Boolean(editingItem);
+
+  const resetComposer = () => {
+    setContent('');
+    setAdContent('');
+    setSelectedImage(null);
+    setExistingImageUrl(null);
+    setEditingItem(null);
+  };
+
+  const startEditPost = (post) => {
+    setEditingItem({ type: 'post', id: post.id });
+    setIsAdMode(false);
+    setContent(post.content || '');
+    setSelectedComposerTag(TAG_OPTIONS.includes(post.tag) ? post.tag : TAG_OPTIONS[0]);
+    setSelectedImage(null);
+    setExistingImageUrl(post.image || null);
+  };
+
+  const startEditAd = (ad) => {
+    setEditingItem({ type: 'ad', id: ad.id });
+    setIsAdMode(true);
+    setAdContent(ad.content || '');
+    setSelectedImage(null);
+    setExistingImageUrl(ad.image || null);
+  };
+
+  // Modified handlePost to upload image before creating/updating post or ad
   const handlePost = async () => {
-    if (!selectedImage) return Alert.alert('Error', 'Select an image');
+    if (!selectedImage && !(isEditing && existingImageUrl)) return Alert.alert('Error', 'Select an image');
+    if (composerWordCount > MAX_WORDS) {
+      return Alert.alert('Too long', `Please keep it to ${MAX_WORDS} words or fewer (currently ${composerWordCount}).`);
+    }
     setLoading(true);
     try {
-      // Upload image first
-      let imageUrl = selectedImage;
-      if (!selectedImage.startsWith('http://') && !selectedImage.startsWith('https://') && !selectedImage.startsWith('/images/')) {
-        const uploadRes = await apiUploadImage(selectedImage);
-        imageUrl = typeof uploadRes === 'string' ? uploadRes : uploadRes.imageUrl || uploadRes.url || uploadRes.path;
+      // Upload image first, if a new one was picked
+      let imageUrl = existingImageUrl;
+      if (selectedImage) {
+        if (!selectedImage.startsWith('http://') && !selectedImage.startsWith('https://') && !selectedImage.startsWith('/images/')) {
+          const uploadRes = await apiUploadImage(selectedImage);
+          imageUrl = typeof uploadRes === 'string' ? uploadRes : uploadRes.imageUrl || uploadRes.url || uploadRes.path;
+        } else {
+          imageUrl = selectedImage;
+        }
       }
       if (isAdMode) {
         if (!adContent.trim()) return Alert.alert('Error', 'Enter ad content');
-        await addAd(tileId, user.id, {
-          content: adContent,
-          image: imageUrl,
-          tag: 'tag ad',
-        });
-        setAdContent('');
-        setSelectedImage(null);
-        Alert.alert('Success', 'Ad created successfully');
+        if (isEditing) {
+          await updateAd(editingItem.id, user.id, { content: adContent, image: imageUrl });
+          Alert.alert('Success', 'Ad updated successfully');
+        } else {
+          await addAd(tileId, user.id, { content: adContent, image: imageUrl, tag: 'tag ad' });
+          Alert.alert('Success', 'Ad created successfully');
+        }
         setAds(await getAdsByTile(tileId));
       } else {
         if (!content.trim()) return Alert.alert('Error', 'Enter content');
-        await addPost(tileId, user.id, {
-          content,
-          image: imageUrl,
-          tag: selectedComposerTag,
-        });
-        setContent('');
-        setSelectedImage(null);
-        Alert.alert('Success', 'Post created successfully');
+        if (isEditing) {
+          await updatePost(editingItem.id, user.id, { content, image: imageUrl, tag: selectedComposerTag });
+          Alert.alert('Success', 'Post updated successfully');
+        } else {
+          await addPost(tileId, user.id, { content, image: imageUrl, tag: selectedComposerTag });
+          Alert.alert('Success', 'Post created successfully');
+        }
         setPosts(await getPostsByTile(tileId));
       }
+      resetComposer();
     } catch (error) {
-      Alert.alert('Image Upload Error', error.message || JSON.stringify(error));
-      Alert.alert('Error', 'Failed to create post/ad: ' + error.message);
+      Alert.alert('Error', 'Failed to save post/ad: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickGridImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedGridImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image: ' + error.message);
+    }
+  };
+
+  const handleGridIconSave = async () => {
+    if (!selectedGridImage) return;
+    setLoading(true);
+    try {
+      const uploadRes = await apiUploadImage(selectedGridImage);
+      const imageUrl = typeof uploadRes === 'string' ? uploadRes : uploadRes.imageUrl || uploadRes.url || uploadRes.path;
+      await updateTile(Number(tileId), { image: imageUrl });
+      setSelectedGridImage(null);
+      Alert.alert('Success', 'Grid icon updated successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update grid icon: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -142,6 +217,24 @@ export default function PostPage() {
 
   const swipeStartX = useRef({});
   const flatListRef = useRef(null);
+
+  const isViewerAdmin = normalizeRole(user?.role) === 'admin';
+  const isViewerAdminRef = useRef(isViewerAdmin);
+  isViewerAdminRef.current = isViewerAdmin;
+  const trackAdViewRef = useRef(trackAdView);
+  trackAdViewRef.current = trackAdView;
+
+  const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 60 });
+  const onViewableItemsChangedRef = useRef(({ viewableItems }) => {
+    if (isViewerAdminRef.current) return;
+    viewableItems.forEach(({ item }) => {
+      const isAd = typeof item.views === 'number';
+      if (isAd && !viewedAdIdsRef.current.has(item.id)) {
+        viewedAdIdsRef.current.add(item.id);
+        trackAdViewRef.current(item.id);
+      }
+    });
+  });
 
   const LEGACY_TAGS = ['tag news', 'tag ad'];
   const availableTags = ['All', ...TAG_OPTIONS];
@@ -152,8 +245,12 @@ export default function PostPage() {
     return null;
   };
 
-  // Mix posts and ads together (one ad for every 2-3 posts)
+  // Mix posts and ads together (one ad for every 2-3 posts). Ads are only
+  // mixed into the unfiltered "All" feed — a tag filter is a posts-only search,
+  // so no ads should appear while one is active.
   const mixedFeed = (() => {
+    if (selectedTagFilter !== 'All') return filteredPosts;
+
     const mixed = [];
     const postCount = filteredPosts.length;
     const adCount = ads.length;
@@ -221,17 +318,28 @@ export default function PostPage() {
       {/* Admin Posting Section */}
       {user && normalizeRole(user.role) === 'admin' && Number(user.tileId) === Number(tileId) && (
         <ScrollView style={{ padding: 15, backgroundColor: '#f9f9f9' }} contentContainerStyle={{ paddingBottom: 20 }}>
+          {isEditing && (
+            <View style={styles.editingBanner}>
+              <Text style={styles.editingBannerText}>Editing {editingItem.type === 'ad' ? 'Ad' : 'Post'}</Text>
+              <TouchableOpacity onPress={resetComposer}>
+                <Text style={styles.editingCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Toggle Post vs Ad */}
-          <View style={{ flexDirection: 'row', marginBottom: 15, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#ccc' }}>
+          <View style={{ flexDirection: 'row', marginBottom: 15, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#ccc', opacity: isEditing ? 0.5 : 1 }}>
             <TouchableOpacity
               style={[styles.toggleBtn, isAdMode ? {} : { backgroundColor: '#333' }]}
-              onPress={() => setIsAdMode(false)}
+              onPress={() => !isEditing && setIsAdMode(false)}
+              disabled={isEditing}
             >
               <Text style={{ color: isAdMode ? '#333' : '#fff', fontWeight: '600' }}>📰 Post</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleBtn, isAdMode ? { backgroundColor: '#FF6B6B' } : {}]}
-              onPress={() => setIsAdMode(true)}
+              onPress={() => !isEditing && setIsAdMode(true)}
+              disabled={isEditing}
             >
               <Text style={{ color: isAdMode ? '#fff' : '#333', fontWeight: '600' }}>📢 Ad</Text>
             </TouchableOpacity>
@@ -254,15 +362,17 @@ export default function PostPage() {
 
           {/* Content Inputs */}
           <TouchableOpacity style={[styles.btn, { backgroundColor: '#666', marginBottom: 10 }]} onPress={pickImage}>
-            <Text style={{ color: '#fff' }}>📸 Upload Image</Text>
+            <Text style={{ color: '#fff' }}>📸 {selectedImage || existingImageUrl ? 'Change Image' : 'Upload Image'}</Text>
           </TouchableOpacity>
 
-          {selectedImage && (
+          {(selectedImage || existingImageUrl) && (
             <View style={styles.imagePreview}>
-              <Image source={{ uri: selectedImage }} style={styles.previewImage} />
-              <TouchableOpacity style={styles.removeBtn} onPress={() => setSelectedImage(null)}>
-                <Text style={{ color: '#fff', fontSize: 12 }}>Remove</Text>
-              </TouchableOpacity>
+              <Image source={{ uri: selectedImage || formatImageUrl(existingImageUrl) }} style={styles.previewImage} />
+              {selectedImage && (
+                <TouchableOpacity style={styles.removeBtn} onPress={() => setSelectedImage(null)}>
+                  <Text style={{ color: '#fff', fontSize: 12 }}>Remove</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -273,10 +383,61 @@ export default function PostPage() {
             style={[styles.input, { minHeight: 120, textAlignVertical: 'top' }]}
             multiline
           />
+          <Text style={composerWordCount > MAX_WORDS ? styles.wordCountError : styles.wordCountText}>
+            {composerWordCount} / {MAX_WORDS} words
+          </Text>
 
-          <TouchableOpacity style={styles.btn} onPress={handlePost}>
-            <Text style={{ color: '#fff' }}>{isAdMode ? '📢 Upload Ad' : '📝 Post'}</Text>
+          <TouchableOpacity
+            style={[styles.btn, composerWordCount > MAX_WORDS && styles.btnDisabled]}
+            onPress={handlePost}
+            disabled={composerWordCount > MAX_WORDS}
+          >
+            <Text style={{ color: '#fff' }}>
+              {isEditing
+                ? `💾 Save ${editingItem.type === 'ad' ? 'Ad' : 'Post'}`
+                : isAdMode ? '📢 Upload Ad' : '📝 Post'}
+            </Text>
           </TouchableOpacity>
+
+          {/* Change Grid Icon */}
+          <View style={styles.gridIconSection}>
+            <Text style={styles.sectionHeading}>Grid Icon</Text>
+            <Image
+              source={{ uri: selectedGridImage || formatImageUrl(getTileById(tileId)?.image) }}
+              style={styles.gridIconPreview}
+            />
+            <TouchableOpacity style={[styles.btn, { backgroundColor: '#666' }]} onPress={pickGridImage}>
+              <Text style={{ color: '#fff' }}>🖼️ Change Grid Icon</Text>
+            </TouchableOpacity>
+            {selectedGridImage && (
+              <TouchableOpacity style={[styles.btn, { backgroundColor: '#0066cc', marginTop: 8 }]} onPress={handleGridIconSave}>
+                <Text style={{ color: '#fff' }}>Save Grid Icon</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* My Posts & Ads - editable list */}
+          {(posts.length > 0 || ads.length > 0) && (
+            <View style={styles.myContentSection}>
+              <Text style={styles.sectionHeading}>My Posts & Ads</Text>
+              {posts.map((item) => (
+                <View key={`post-${item.id}`} style={styles.myContentRow}>
+                  <Text style={styles.myContentText} numberOfLines={1}>{item.content}</Text>
+                  <TouchableOpacity style={styles.editSmallBtn} onPress={() => startEditPost(item)}>
+                    <Text style={styles.editSmallBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {ads.map((item) => (
+                <View key={`ad-${item.id}`} style={styles.myContentRow}>
+                  <Text style={styles.myContentText} numberOfLines={1}>📢 {item.content}</Text>
+                  <TouchableOpacity style={styles.editSmallBtn} onPress={() => startEditAd(item)}>
+                    <Text style={styles.editSmallBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Show Posts Button - Only for admins */}
           {user?.role && normalizeRole(user.role) === 'admin' && (
@@ -327,27 +488,33 @@ export default function PostPage() {
               disableIntervalMomentum
               showsVerticalScrollIndicator={false}
               getItemLayout={(_, index) => ({ length: feedHeight, offset: feedHeight * index, index })}
+              viewabilityConfig={viewabilityConfigRef.current}
+              onViewableItemsChanged={onViewableItemsChangedRef.current}
               renderItem={({ item }) => {
                 const imageUrl = item.image.startsWith('http')
                   ? item.image
                   : `${BACKEND_URL}${item.image}`;
                 const isAd = typeof item.views === 'number';
                 const displayTag = getDisplayTag(item, isAd);
+                const ImageWrapper = isAd ? TouchableOpacity : View;
+                const imageWrapperProps = isAd
+                  ? { activeOpacity: 0.9, onPress: () => !isViewerAdmin && trackAdClick(item.id) }
+                  : {};
 
                 return (
                   <View style={[styles.card, { height: feedHeight }]}>
-                    <View style={styles.cardImageWrap}>
+                    <ImageWrapper style={styles.cardImageWrap} {...imageWrapperProps}>
                       <Image
                         source={{ uri: imageUrl }}
                         style={styles.cardImage}
                         onError={(e) => console.log('Image Load Error:', e.nativeEvent.error)}
                       />
                       {displayTag && (
-                        <View style={[styles.tagChip, isAd ? styles.tagChipAd : styles.tagChipNews]}>
-                          <Text style={styles.tagChipText}>{displayTag}</Text>
+                        <View style={[styles.tagChip, isAd ? styles.tagChipAd : styles.tagChipNews, { top: insets.top + 16 }]}>
+                          <Text style={styles.tagChipText} numberOfLines={1} ellipsizeMode="tail">{displayTag}</Text>
                         </View>
                       )}
-                    </View>
+                    </ImageWrapper>
                     <View style={styles.cardTextWrap}>
                       <ScrollView showsVerticalScrollIndicator={false}>
                         <Text style={styles.cardText}>{item.content}</Text>
@@ -375,6 +542,20 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  btnDisabled: {
+    opacity: 0.5,
+  },
+  wordCountText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 10,
+  },
+  wordCountError: {
+    fontSize: 12,
+    color: '#cc0000',
+    fontWeight: '700',
     marginBottom: 10,
   },
   toggleBtn: {
@@ -431,6 +612,80 @@ const styles = StyleSheet.create({
   },
   composerTagTextActive: {
     color: '#fff',
+  },
+  editingBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+  },
+  editingBannerText: {
+    color: '#92400e',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  editingCancelText: {
+    color: '#0066cc',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 10,
+  },
+  gridIconSection: {
+    marginTop: 20,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  gridIconPreview: {
+    width: 90,
+    height: 97,
+    borderRadius: 8,
+    backgroundColor: '#eee',
+    marginBottom: 10,
+  },
+  myContentSection: {
+    marginTop: 20,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  myContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  myContentText: {
+    flex: 1,
+    color: '#333',
+    fontSize: 13,
+    marginRight: 10,
+  },
+  editSmallBtn: {
+    backgroundColor: '#0f6d68',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  editSmallBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
   },
   sidebarToggle: {
     position: 'absolute',
@@ -504,6 +759,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     left: 16,
+    maxWidth: '55%',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,

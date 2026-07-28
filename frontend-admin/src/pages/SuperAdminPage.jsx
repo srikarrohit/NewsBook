@@ -5,11 +5,18 @@ import { useTiles } from '../context/TileContext';
 import { apiGet, apiPost } from '../constants/apiUtil';
 import { apiUploadImage } from '../constants/apiUploadImage';
 import { normalizeRole } from '../constants/roleUtils';
+import indiaLocations from '../constants/indiaLocations.json';
+
+const STATES = Object.keys(indiaLocations).sort();
+const districtsFor = (state) => (state && indiaLocations[state] ? [...indiaLocations[state]].sort() : []);
 
 export default function SuperAdminPage() {
   const { user, logout, isLoading } = useAuth();
   const { tiles, fetchTiles } = useTiles();
   const navigate = useNavigate();
+
+  const role = normalizeRole(user?.role);
+  const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
 
   const [adminAccounts, setAdminAccounts] = useState([]);
   const [adminAccountsLoading, setAdminAccountsLoading] = useState(false);
@@ -18,22 +25,23 @@ export default function SuperAdminPage() {
   const [newGridName, setNewGridName] = useState('');
   const [selectedGridImage, setSelectedGridImage] = useState(null);
   const [newGridPriority, setNewGridPriority] = useState('1');
+  const [newGridState, setNewGridState] = useState('');
+  const [newGridDistrict, setNewGridDistrict] = useState('');
   const [newAdminUsername, setNewAdminUsername] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [existingTileId, setExistingTileId] = useState('');
   const [existingAdminUsername, setExistingAdminUsername] = useState('');
   const [existingAdminPassword, setExistingAdminPassword] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
     if (isLoading) return;
-    const role = normalizeRole(user?.role);
-    const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
     if (!isSuperAdmin) {
       navigate(role === 'admin' && user?.tileId ? `/admin/${user.tileId}` : '/login', { replace: true });
     }
-  }, [isLoading, navigate, user]);
+  }, [isLoading, navigate, user, isSuperAdmin, role]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -57,8 +65,8 @@ export default function SuperAdminPage() {
   };
 
   const registerGrid = async () => {
-    if (!newGridName.trim() || !newAdminUsername.trim() || !newAdminPassword.trim() || !selectedGridImage) {
-      return setMessage({ type: 'error', text: 'Enter a grid name, upload an image, and provide admin credentials.' });
+    if (!newGridName.trim() || !newAdminUsername.trim() || !newAdminPassword.trim() || !selectedGridImage || !newGridState || !newGridDistrict) {
+      return setMessage({ type: 'error', text: 'Enter a grid name, state, district, upload an image, and provide admin credentials.' });
     }
 
     setLoading(true);
@@ -72,6 +80,8 @@ export default function SuperAdminPage() {
         tileName: newGridName.trim(),
         tileImage: imageUrl,
         priority: Number(newGridPriority) || 0,
+        state: newGridState,
+        district: newGridDistrict,
         createdBy: user.username,
       });
       const createdTile = Array.isArray(res) && res[1] ? res[1] : res;
@@ -81,6 +91,8 @@ export default function SuperAdminPage() {
       setNewAdminUsername('');
       setNewAdminPassword('');
       setNewGridPriority('1');
+      setNewGridState('');
+      setNewGridDistrict('');
       fetchTiles();
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to create grid.' });
@@ -106,6 +118,7 @@ export default function SuperAdminPage() {
       setExistingAdminUsername('');
       setExistingAdminPassword('');
       setExistingTileId('');
+      fetchAdminAccounts();
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to create admin user.' });
     } finally {
@@ -124,9 +137,22 @@ export default function SuperAdminPage() {
         <div className="segment">
           <h2 className="section-title">Register a new grid</h2>
           <input className="input" placeholder="Grid name" value={newGridName} onChange={(e) => setNewGridName(e.target.value)} />
+          <select className="input" value={newGridState} onChange={(e) => { setNewGridState(e.target.value); setNewGridDistrict(''); }}>
+            <option value="">Select state</option>
+            {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="input" value={newGridDistrict} onChange={(e) => setNewGridDistrict(e.target.value)} disabled={!newGridState}>
+            <option value="">Select district</option>
+            {districtsFor(newGridState).map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
           <label className="upload-button">
             {selectedGridImage ? 'Change Image' : 'Upload Image'}
-            <input type="file" accept="image/*" hidden onChange={(e) => setSelectedGridImage(e.target.files?.[0] || null)} />
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => setSelectedGridImage(e.target.files?.[0] || null)}
+            />
           </label>
           {selectedGridImage && (
             <div className="image-preview">
@@ -168,6 +194,7 @@ export default function SuperAdminPage() {
                 <div className="tile-name">{tile.name}</div>
                 <div className="tile-details">Database ID: {tile.id}</div>
                 <div className="tile-details">Tile ID: {tile.tileId}</div>
+                <div className="tile-details">Location: {tile.district ?? '—'}, {tile.state ?? '—'}</div>
                 <div className="tile-details">Priority: {tile.priority ?? 0}</div>
                 <div className="tile-hint">Click to view admin account &amp; update</div>
               </div>
@@ -187,6 +214,7 @@ export default function SuperAdminPage() {
                 <div className="tile-name">{account.username}</div>
                 <div className="tile-details">Password: {account.password}</div>
                 <div className="tile-details">Tile ID: {account.tileId ?? '—'}</div>
+                <div className="tile-details">Location: {account.district ?? '—'}, {account.state ?? '—'}</div>
               </div>
             ))
           )}

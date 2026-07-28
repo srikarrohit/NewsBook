@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { normalizeRole } from '../constants/roleUtils';
 
 export default function Admin() {
-  const { user, isLoading } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -19,10 +19,14 @@ export default function Admin() {
       } else if (!user) {
         router.replace('/login');
       } else {
-        router.replace('/');
+        // Unrecognized/stale role (e.g. a cached session from a role that no
+        // longer exists) — '/' re-renders this same component, so looping
+        // back here would bounce forever. Log out instead.
+        logout();
+        router.replace('/login');
       }
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, logout]);
 
   if (isLoading || !user) {
     return (

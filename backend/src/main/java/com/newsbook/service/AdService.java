@@ -2,7 +2,9 @@ package com.newsbook.service;
 
 import com.newsbook.dto.AdDTO;
 import com.newsbook.entity.Ad;
+import com.newsbook.entity.AdView;
 import com.newsbook.repository.AdRepository;
+import com.newsbook.repository.AdViewRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +17,9 @@ import java.util.stream.Collectors;
 public class AdService {
     @Autowired
     private AdRepository adRepository;
+
+    @Autowired
+    private AdViewRepository adViewRepository;
 
     public AdDTO createAd(Long tileId, Long adminId, String content, String image) {
         Ad ad = new Ad();
@@ -62,8 +67,33 @@ public class AdService {
         return ad.map(this::convertToDTO).orElse(null);
     }
 
-    public void trackAdView(Long adId) {
+    public AdDTO updateAd(Long id, String content, String image) {
+        Optional<Ad> optionalAd = adRepository.findById(id);
+        if (!optionalAd.isPresent()) {
+            return null;
+        }
+        Ad ad = optionalAd.get();
+        if (content != null && !content.trim().isEmpty()) {
+            ad.setContent(content);
+        }
+        if (image != null && !image.trim().isEmpty()) {
+            ad.setImage(image);
+        }
+        Ad updated = adRepository.save(ad);
+        return convertToDTO(updated);
+    }
+
+    public void trackAdView(Long adId, String ipAddress) {
+        if (ipAddress == null || ipAddress.isEmpty()) {
+            return;
+        }
+        // One view per IP address per ad — repeat visits from the same address
+        // don't inflate the count.
+        if (adViewRepository.existsByAdIdAndIpAddress(adId, ipAddress)) {
+            return;
+        }
         adRepository.findById(adId).ifPresent(ad -> {
+            adViewRepository.save(new AdView(adId, ipAddress));
             ad.setViews(ad.getViews() + 1);
             adRepository.save(ad);
         });

@@ -33,6 +33,8 @@ public class Tile {
     private String name;
     private String image;
     private Integer priority = 0;
+    private String state;
+    private String district;
 
     // Explicit getters and setters for all fields
     public Long getId() { return id; }
@@ -53,4 +55,8 @@ public class Tile {
     public void setImage(String image) { this.image = image; }
     public Integer getPriority() { return priority; }
     public void setPriority(Integer priority) { this.priority = priority; }
+    public String getDistrict() { return district; }
+    public void setDistrict(String district) { this.district = district; }
+    public String getState() { return state; }
+    public void setState(String state) { this.state = state; }
 }

@@ -3,7 +3,9 @@ package com.newsbook.service;
 import com.newsbook.dto.AdminAccountDTO;
 import com.newsbook.dto.LoginRequest;
 import com.newsbook.dto.UserDTO;
+import com.newsbook.entity.Tile;
 import com.newsbook.entity.User;
+import com.newsbook.repository.TileRepository;
 import com.newsbook.repository.UserRepository;
 
 
@@ -22,6 +24,9 @@ public class UserService {
     private static final Logger logger = LoggerFactory.getLogger(UserService.class);
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private TileRepository tileRepository;
 
     public UserDTO login(LoginRequest loginRequest) {
         logger.info("Login attempt: username='{}', password='{}'", loginRequest.getUsername(), loginRequest.getPassword());
@@ -49,8 +54,18 @@ public class UserService {
 
     public List<AdminAccountDTO> getAllAdminAccounts() {
         return userRepository.findByRole(User.UserRole.ADMIN).stream()
-            .map(AdminAccountDTO::fromEntity)
+            .map(user -> {
+                Tile tile = resolveTile(user.getTileId());
+                return AdminAccountDTO.fromEntity(user, tile != null ? tile.getState() : null, tile != null ? tile.getDistrict() : null);
+            })
             .collect(Collectors.toList());
+    }
+
+    private Tile resolveTile(Long tileId) {
+        if (tileId == null) {
+            return null;
+        }
+        return tileRepository.findById(tileId).orElse(null);
     }
 
     public UserDTO createUser(String username, String password, User.UserRole role) {

@@ -7,14 +7,19 @@ const TileContext = createContext(null);
 export function TileProvider({ children }) {
   const [tiles, setTiles] = useState([]); // Array of tile objects from backend
   const [loading, setLoading] = useState(false);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
 
-  const fetchTiles = useCallback(async () => {
+  const fetchTiles = useCallback(async (state, district) => {
     setLoading(true);
     try {
-      const data = await apiGet('/tiles');
+      const parts = [];
+      if (state) parts.push(`state=${encodeURIComponent(state)}`);
+      if (district) parts.push(`district=${encodeURIComponent(district)}`);
+      const data = await apiGet(parts.length ? `/tiles?${parts.join('&')}` : '/tiles');
       setTiles(data);
     } finally {
       setLoading(false);
+      setHasFetchedOnce(true);
     }
   }, []);
 
@@ -87,7 +92,7 @@ export function TileProvider({ children }) {
   };
 
   return (
-    <TileContext.Provider value={{ tiles, loading, fetchTiles, getTileById, createTile, updateTile, deleteTile, getPostsByTile, getArchivedPostsByTile, addPost }}>
+    <TileContext.Provider value={{ tiles, loading, hasFetchedOnce, fetchTiles, getTileById, createTile, updateTile, deleteTile, getPostsByTile, getArchivedPostsByTile, addPost }}>
       {children}
     </TileContext.Provider>
   );

@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useAds } from '../../context/AdsContext';
 import { useTiles } from '../../context/TileContext';
@@ -21,7 +22,7 @@ const displayTag = (tag) => (tag && !LEGACY_TAGS.includes(tag) ? tag : 'General'
 
 export default function AdminTilePage() {
   const { user, logout, isLoading } = useAuth();
-  const { getTileById, getPostsByTile, getArchivedPostsByTile } = useTiles();
+  const { getTileById, getPostsByTile, getArchivedPostsByTile, hasFetchedOnce, fetchTiles } = useTiles();
   const { getAdsByTile, getArchivedAdsByTile } = useAds();
   const { tileId } = useLocalSearchParams();
   const router = useRouter();
@@ -32,6 +33,7 @@ export default function AdminTilePage() {
   const [archivedPosts, setArchivedPosts] = useState([]);
   const [archivedAds, setArchivedAds] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [retriedTileFetch, setRetriedTileFetch] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -54,6 +56,23 @@ export default function AdminTilePage() {
     const selected = getTileById(Number(tileId));
     setTile(selected || null);
   }, [getTileById, tileId]);
+
+  useEffect(() => {
+    // Tiles have finished their first load and this admin's assigned tile
+    // can't be found. This can be a genuinely stale session (tile deleted),
+    // but it can also mean the app's one-time tile fetch on launch raced a
+    // backend restart/network blip and came back empty. Retry once before
+    // concluding the session is stale and logging out.
+    if (!isLoading && hasFetchedOnce && user && !tile) {
+      if (!retriedTileFetch) {
+        setRetriedTileFetch(true);
+        fetchTiles();
+      } else {
+        logout();
+        router.replace('/login');
+      }
+    }
+  }, [isLoading, hasFetchedOnce, user, tile, retriedTileFetch, fetchTiles, logout, router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -102,14 +121,15 @@ export default function AdminTilePage() {
 
   if (isLoading || !tile) {
     return (
-      <View style={styles.loaderContainer}>
+      <SafeAreaView style={styles.loaderContainer}>
         <ActivityIndicator size="large" color="#1f2a45" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>      
+    <SafeAreaView style={styles.root} edges={['top']}>
+    <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Image source={{ uri: tile.uri }} style={styles.heroImage} />
         <View style={styles.heroOverlay} />
@@ -145,6 +165,12 @@ export default function AdminTilePage() {
             <View key={item.id} style={styles.card}>
               <Text style={styles.cardTitle}>{displayTag(item.tag)}</Text>
               <Text style={styles.cardContent}>{item.content}</Text>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => router.push(`/compose/${tileId}?editType=post&editId=${item.id}`)}
+              >
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -191,12 +217,14 @@ export default function AdminTilePage() {
                     <Text style={styles.adStatLabel}>Dismissals</Text>
                     <Text style={styles.adStatValue}>{item.dismissals || 0}</Text>
                   </View>
-                  <View style={styles.adStatBox}>
-                    <Text style={styles.adStatLabel}>Charges</Text>
-                    <Text style={styles.adStatValue}>{item.charges || 0}</Text>
-                  </View>
                 </View>
                 <Text style={styles.dismissalRateText}>Dismissal Rate: {calculateDismissalRate(item)}%</Text>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => router.push(`/compose/${tileId}?editType=ad&editId=${item.id}`)}
+                >
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
               </View>
             ))}
           </>
@@ -258,10 +286,6 @@ export default function AdminTilePage() {
                     <Text style={styles.adStatLabel}>Dismissals</Text>
                     <Text style={styles.adStatValue}>{item.dismissals || 0}</Text>
                   </View>
-                  <View style={styles.adStatBox}>
-                    <Text style={styles.adStatLabel}>Charges</Text>
-                    <Text style={styles.adStatValue}>{item.charges || 0}</Text>
-                  </View>
                 </View>
                 <Text style={styles.dismissalRateText}>Dismissal Rate: {calculateDismissalRate(item)}%</Text>
               </View>
@@ -274,6 +298,7 @@ export default function AdminTilePage() {
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -486,6 +511,19 @@ const styles = StyleSheet.create({
   cardContent: {
     color: '#475569',
     lineHeight: 20,
+  },
+  editButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#0f6d68',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
   emptyText: {
     color: '#64748b',

@@ -22,6 +22,23 @@ public class TileService {
                 .collect(Collectors.toList());
     }
 
+    public List<TileDTO> getTilesByDistrict(String district) {
+        return tileRepository.findByDistrict(district).stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    public List<TileDTO> getTilesByLocation(String state, String district) {
+        List<Tile> exactMatch = tileRepository.findByStateAndDistrict(state, district);
+        // Fall back to a district-only match so grids whose state wasn't recorded
+        // (e.g. registered before state tracking existed) still show up for readers
+        // browsing by district, instead of silently disappearing.
+        List<Tile> matches = exactMatch.isEmpty() ? tileRepository.findByDistrict(district) : exactMatch;
+        return matches.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
     public TileDTO getTileById(Long id) {
         Optional<Tile> tile = tileRepository.findById(id);
         return tile.map(this::toDTO).orElse(null);
@@ -44,6 +61,8 @@ public class TileService {
         tile.setName(tileDTO.getName());
         tile.setImage(tileDTO.getImage());
         tile.setPriority(tileDTO.getPriority() != null ? tileDTO.getPriority() : 0);
+        tile.setState(tileDTO.getState());
+        tile.setDistrict(tileDTO.getDistrict());
         Tile saved = tileRepository.save(tile);
         return toDTO(saved);
     }
@@ -86,6 +105,12 @@ public class TileService {
             if (tileDTO.getPriority() != null) {
                 tile.setPriority(tileDTO.getPriority());
             }
+            if (tileDTO.getState() != null) {
+                tile.setState(tileDTO.getState());
+            }
+            if (tileDTO.getDistrict() != null) {
+                tile.setDistrict(tileDTO.getDistrict());
+            }
             tile.setUpdatedAt(LocalDateTime.now());
             Tile updated = tileRepository.save(tile);
             return toDTO(updated);
@@ -98,6 +123,6 @@ public class TileService {
     }
 
     private TileDTO toDTO(Tile tile) {
-        return new TileDTO(tile.getId(), tile.getTileId(), tile.getName(), tile.getImage(), tile.getPriority());
+        return new TileDTO(tile.getId(), tile.getTileId(), tile.getName(), tile.getImage(), tile.getPriority(), tile.getState(), tile.getDistrict());
     }
 }

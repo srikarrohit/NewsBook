@@ -25,6 +25,8 @@ com\newsbook\dto\TileDTO.class
 com\newsbook\repository\AdRepository.class
 com\newsbook\repository\PostRepository.class
 com\newsbook\dto\CreateAdminForTileRequest.class
+com\newsbook\entity\AdView.class
 com\newsbook\entity\User.class
 com\newsbook\controller\ImageUploadController.class
+com\newsbook\repository\AdViewRepository.class
 com\newsbook\dto\PostDTO.class

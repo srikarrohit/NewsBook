@@ -1,29 +1,46 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAds } from '../context/AdsContext';
 import { useTiles } from '../context/TileContext';
+import { apiGet, apiPut } from '../constants/apiUtil';
 import { apiUploadImage } from '../constants/apiUploadImage';
+import { API_BASE_URL } from '../constants/api';
 import { normalizeRole } from '../constants/roleUtils';
+import ImageCropModal from '../components/ImageCropModal';
 
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
+const MAX_WORDS = 80;
+const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
+const formatImageUrl = (image) => {
+  if (!image) return null;
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `${API_BASE_URL}${image.startsWith('/') ? '' : '/'}${image}`;
+};
 
 export default function ComposePage() {
   const { user, isLoading } = useAuth();
   const { addPost } = useTiles();
   const { addAd } = useAds();
   const { tileId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [selectedMode, setSelectedMode] = useState('post');
+  const editType = searchParams.get('editType'); // 'post' | 'ad' | null
+  const editId = searchParams.get('editId');
+  const isEditing = Boolean(editType && editId);
+
+  const [selectedMode, setSelectedMode] = useState(editType === 'ad' ? 'ad' : 'post');
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0]);
   const [content, setContent] = useState('');
   const [adContent, setAdContent] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [existingImageUrl, setExistingImageUrl] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [isListening, setIsListening] = useState(false);
+  const [cropSource, setCropSource] = useState(null);
   const recognitionRef = useRef(null);
 
   useEffect(() => {
@@ -34,18 +51,39 @@ export default function ComposePage() {
     }
   }, [isLoading, navigate, tileId, user]);
 
+  // Load the existing post/ad when editing
+  useEffect(() => {
+    if (!isEditing) return;
+    (async () => {
+      try {
+        const data = await apiGet(editType === 'ad' ? `/ads/${editId}` : `/posts/${editId}`);
+        if (editType === 'ad') {
+          setAdContent(data.content || '');
+        } else {
+          setContent(data.content || '');
+          setSelectedTag(TAG_OPTIONS.includes(data.tag) ? data.tag : TAG_OPTIONS[0]);
+        }
+        setExistingImageUrl(data.image || null);
+      } catch (error) {
+        setMessage({ type: 'error', text: error.message || 'Unable to load for editing.' });
+      }
+    })();
+  }, [isEditing, editType, editId]);
+
   useEffect(() => {
     if (!selectedImage) {
-      setImagePreviewUrl(null);
+      setImagePreviewUrl(existingImageUrl ? formatImageUrl(existingImageUrl) : null);
       return;
     }
     const url = URL.createObjectURL(selectedImage);
     setImagePreviewUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [selectedImage]);
+  }, [selectedImage, existingImageUrl]);
 
   const activeText = selectedMode === 'post' ? content : adContent;
   const setActiveText = selectedMode === 'post' ? setContent : setAdContent;
+  const wordCount = countWords(activeText);
+  const overWordLimit = wordCount > MAX_WORDS;
 
   const SpeechRecognition = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
 
@@ -80,15 +118,27 @@ export default function ComposePage() {
     if (!activeText.trim()) {
       return setMessage({ type: 'error', text: 'Please enter some content.' });
     }
-    if (!selectedImage) {
+    if (overWordLimit) {
+      return setMessage({ type: 'error', text: `Please keep it to ${MAX_WORDS} words or fewer (currently ${wordCount}).` });
+    }
+    if (!selectedImage && !(isEditing && existingImageUrl)) {
       return setMessage({ type: 'error', text: 'Please select an image.' });
     }
     setLoading(true);
     try {
-      const uploadRes = await apiUploadImage(selectedImage);
-      const imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
+      let imageUrl = existingImageUrl;
+      if (selectedImage) {
+        const uploadRes = await apiUploadImage(selectedImage);
+        imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
+      }
 
-      if (selectedMode === 'post') {
+      if (isEditing) {
+        if (editType === 'ad') {
+          await apiPut(`/ads/${editId}`, { adminId: user.id, content: adContent, image: imageUrl });
+        } else {
+          await apiPut(`/posts/${editId}`, { adminId: user.id, content, image: imageUrl, tag: selectedTag });
+        }
+      } else if (selectedMode === 'post') {
         await addPost(tileId, user.id, { content, image: imageUrl, tag: selectedTag });
       } else {
         await addAd(tileId, user.id, { content: adContent, image: imageUrl, tag: 'admin ad' });
@@ -108,23 +158,27 @@ export default function ComposePage() {
           Back
         </button>
 
-        <h1 className="heading">Write a Post</h1>
-        <p className="subheading">Compose your story and see exactly how it will look before publishing.</p>
+        <h1 className="heading">{isEditing ? `Edit ${selectedMode === 'ad' ? 'Ad' : 'Post'}` : 'Write a Post'}</h1>
+        <p className="subheading">
+          {isEditing ? 'Update the content and see the preview before saving.' : 'Compose your story and see exactly how it will look before publishing.'}
+        </p>
 
-        <div className="mode-row">
-          <button
-            className={`mode-button ${selectedMode === 'post' ? 'active' : ''}`}
-            onClick={() => setSelectedMode('post')}
-          >
-            Post
-          </button>
-          <button
-            className={`mode-button ${selectedMode === 'ad' ? 'active' : ''}`}
-            onClick={() => setSelectedMode('ad')}
-          >
-            Ad
-          </button>
-        </div>
+        {!isEditing && (
+          <div className="mode-row">
+            <button
+              className={`mode-button ${selectedMode === 'post' ? 'active' : ''}`}
+              onClick={() => setSelectedMode('post')}
+            >
+              Post
+            </button>
+            <button
+              className={`mode-button ${selectedMode === 'ad' ? 'active' : ''}`}
+              onClick={() => setSelectedMode('ad')}
+            >
+              Ad
+            </button>
+          </div>
+        )}
 
         {selectedMode === 'post' && (
           <div className="segment">
@@ -146,8 +200,17 @@ export default function ComposePage() {
         <div className="segment">
           <h2 className="section-title">Content</h2>
           <label className="upload-button">
-            {selectedImage ? 'Change Image' : 'Upload Image'}
-            <input type="file" accept="image/*" hidden onChange={(e) => setSelectedImage(e.target.files?.[0] || null)} />
+            {selectedImage || existingImageUrl ? 'Change Image' : 'Upload Image'}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setCropSource(URL.createObjectURL(file));
+                e.target.value = '';
+              }}
+            />
           </label>
           <textarea
             className="input textarea"
@@ -155,6 +218,7 @@ export default function ComposePage() {
             value={activeText}
             onChange={(e) => setActiveText(e.target.value)}
           />
+          <p className={overWordLimit ? 'error-text' : 'helper-text'}>{wordCount} / {MAX_WORDS} words</p>
           <button className="upload-button" onClick={toggleDictation} style={{ marginTop: 4 }}>
             {isListening ? 'Stop Dictation' : 'Dictate with Microphone'}
           </button>
@@ -180,10 +244,30 @@ export default function ComposePage() {
           </div>
         </div>
 
-        <button className="submit-button" onClick={handlePublish} disabled={loading}>
-          {loading ? 'Publishing...' : selectedMode === 'post' ? 'Publish Post' : 'Publish Ad'}
+        <button className="submit-button" onClick={handlePublish} disabled={loading || overWordLimit}>
+          {loading
+            ? (isEditing ? 'Saving...' : 'Publishing...')
+            : isEditing
+              ? `Save ${selectedMode === 'ad' ? 'Ad' : 'Post'}`
+              : selectedMode === 'post' ? 'Publish Post' : 'Publish Ad'}
         </button>
       </div>
+
+      {cropSource && (
+        <ImageCropModal
+          imageSrc={cropSource}
+          fileName={`${selectedMode}.jpg`}
+          onCancel={() => {
+            URL.revokeObjectURL(cropSource);
+            setCropSource(null);
+          }}
+          onConfirm={(file) => {
+            URL.revokeObjectURL(cropSource);
+            setCropSource(null);
+            setSelectedImage(file);
+          }}
+        />
+      )}
     </div>
   );
 }

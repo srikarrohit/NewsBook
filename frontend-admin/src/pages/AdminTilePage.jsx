@@ -10,7 +10,7 @@ const displayTag = (tag) => (tag && !LEGACY_TAGS.includes(tag) ? tag : 'General'
 
 export default function AdminTilePage() {
   const { user, logout, isLoading } = useAuth();
-  const { getTileById, getPostsByTile, getArchivedPostsByTile } = useTiles();
+  const { getTileById, getPostsByTile, getArchivedPostsByTile, hasFetchedOnce, fetchTiles } = useTiles();
   const { getAdsByTile, getArchivedAdsByTile } = useAds();
   const { tileId } = useParams();
   const navigate = useNavigate();
@@ -23,6 +23,7 @@ export default function AdminTilePage() {
   const [archivedAds, setArchivedAds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [retriedTileFetch, setRetriedTileFetch] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -46,6 +47,23 @@ export default function AdminTilePage() {
     setTile(selected || null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getTileById, tileId]);
+
+  useEffect(() => {
+    // Tiles have finished their first load and this admin's assigned tile
+    // can't be found. This can be a genuinely stale session (tile deleted),
+    // but it can also mean the one-time tile fetch on app load raced a
+    // backend restart/network blip and came back empty. Retry once before
+    // concluding the session is stale and logging out.
+    if (!isLoading && hasFetchedOnce && user && !tile) {
+      if (!retriedTileFetch) {
+        setRetriedTileFetch(true);
+        fetchTiles();
+      } else {
+        logout();
+        navigate('/login', { replace: true });
+      }
+    }
+  }, [isLoading, hasFetchedOnce, user, tile, retriedTileFetch, fetchTiles, logout, navigate]);
 
   useEffect(() => {
     loadData();
@@ -135,6 +153,13 @@ export default function AdminTilePage() {
             <div key={item.id} className="card">
               <div className="card-title">{displayTag(item.tag)}</div>
               <div className="card-content">{item.content}</div>
+              <button
+                className="upload-button"
+                style={{ marginTop: 10, marginBottom: 0 }}
+                onClick={() => navigate(`/compose/${tileId}?editType=post&editId=${item.id}`)}
+              >
+                Edit
+              </button>
             </div>
           ))
         )}
@@ -181,12 +206,15 @@ export default function AdminTilePage() {
                     <div className="ad-stat-label">Dismissals</div>
                     <div className="ad-stat-value">{item.dismissals || 0}</div>
                   </div>
-                  <div className="ad-stat-box">
-                    <div className="ad-stat-label">Charges</div>
-                    <div className="ad-stat-value">{item.charges || 0}</div>
-                  </div>
                 </div>
                 <div className="dismissal-rate-text">Dismissal Rate: {calculateDismissalRate(item)}%</div>
+                <button
+                  className="upload-button"
+                  style={{ marginTop: 10, marginBottom: 0 }}
+                  onClick={() => navigate(`/compose/${tileId}?editType=ad&editId=${item.id}`)}
+                >
+                  Edit
+                </button>
               </div>
             ))}
           </>
@@ -247,10 +275,6 @@ export default function AdminTilePage() {
                   <div className="ad-stat-box">
                     <div className="ad-stat-label">Dismissals</div>
                     <div className="ad-stat-value">{item.dismissals || 0}</div>
-                  </div>
-                  <div className="ad-stat-box">
-                    <div className="ad-stat-label">Charges</div>
-                    <div className="ad-stat-value">{item.charges || 0}</div>
                   </div>
                 </div>
                 <div className="dismissal-rate-text">Dismissal Rate: {calculateDismissalRate(item)}%</div>

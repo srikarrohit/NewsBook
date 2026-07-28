@@ -20,9 +20,13 @@ public class AdminController {
     @Autowired
     private TileService tileService;
 
+    private boolean isSuperAdmin(UserDTO u) {
+        return u != null && "SUPER_ADMIN".equals(u.getRole());
+    }
+
     /**
      * Register a new tile and create an admin user assigned to it.
-     * Request body: { username, password, tileName, tileImage }
+     * Request body: { username, password, tileName, tileImage, state, district }
      */
     @PostMapping("/register")
     public ResponseEntity<?> registerAdminAndTile(@RequestBody AdminRegisterRequest req) {
@@ -30,11 +34,16 @@ public class AdminController {
             return ResponseEntity.badRequest().body("username, password, tileName and createdBy are required");
         }
 
-        // Verify creator is SUPER_ADMIN
         UserDTO creator = userService.getUserByUsername(req.getCreatedBy());
-        if (creator == null || !"SUPER_ADMIN".equals(creator.getRole())) {
+        if (!isSuperAdmin(creator)) {
             return ResponseEntity.status(403).body("Only SUPER_ADMIN can register a new grid");
         }
+
+        if (req.getState() == null || req.getState().trim().isEmpty() || req.getDistrict() == null || req.getDistrict().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("state and district are required");
+        }
+        String state = req.getState().trim();
+        String district = req.getDistrict().trim();
 
         try {
             // Create admin user
@@ -45,6 +54,8 @@ public class AdminController {
             tileDTO.setName(req.getTileName());
             tileDTO.setImage(req.getTileImage());
             tileDTO.setPriority(req.getPriority() != null ? req.getPriority() : 0);
+            tileDTO.setState(state);
+            tileDTO.setDistrict(district);
             TileDTO createdTile = tileService.createTileForAdmin(createdUser.getId(), createdUser.getUsername(), tileDTO);
 
             // Associate user with tile
@@ -63,15 +74,15 @@ public class AdminController {
     @GetMapping("/list-admins")
     public ResponseEntity<?> listAdminAccounts(@RequestParam("requestedBy") String requestedBy) {
         UserDTO requester = userService.getUserByUsername(requestedBy);
-        if (requester == null || !"SUPER_ADMIN".equals(requester.getRole())) {
+        if (!isSuperAdmin(requester)) {
             return ResponseEntity.status(403).body("Only SUPER_ADMIN can view admin accounts");
         }
         return ResponseEntity.ok(userService.getAllAdminAccounts());
     }
 
     /**
-     * Create an admin user assigned to an existing tile (super-admin action)
-     * Request body: { username, password, tileId }
+     * Create an admin user assigned to an existing tile (super-admin action).
+     * Request body: { username, password, tileId, createdBy }
      */
     @PostMapping("/create-admin")
     public ResponseEntity<?> createAdminForTile(@RequestBody com.newsbook.dto.CreateAdminForTileRequest req) {
@@ -79,9 +90,8 @@ public class AdminController {
             return ResponseEntity.badRequest().body("username, password, tileId and createdBy are required");
         }
 
-        // Verify creator is SUPER_ADMIN
         UserDTO creator = userService.getUserByUsername(req.getCreatedBy());
-        if (creator == null || !"SUPER_ADMIN".equals(creator.getRole())) {
+        if (!isSuperAdmin(creator)) {
             return ResponseEntity.status(403).body("Only SUPER_ADMIN can create admin users for a grid");
         }
 

@@ -97,6 +97,34 @@ public class PostController {
         return ResponseEntity.notFound().build();
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updatePost(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        PostDTO existing = postService.getPostById(id);
+        if (existing == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Object adminIdObj = request.get("adminId");
+        if (adminIdObj == null) {
+            return ResponseEntity.badRequest().body("adminId is required");
+        }
+        Long adminId;
+        try {
+            adminId = ((Number) adminIdObj).longValue();
+        } catch (ClassCastException ex) {
+            return ResponseEntity.badRequest().body("adminId must be a number");
+        }
+        if (!adminId.equals(existing.getAdminId())) {
+            return ResponseEntity.status(403).body("You can only edit your own posts");
+        }
+
+        String content = request.get("content") instanceof String ? (String) request.get("content") : null;
+        String image = request.get("image") instanceof String ? (String) request.get("image") : null;
+        String tag = request.get("tag") instanceof String ? (String) request.get("tag") : null;
+        PostDTO updated = postService.updatePost(id, content, image, tag);
+        return ResponseEntity.ok(updated);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deletePost(@PathVariable Long id) {
         postService.deletePost(id);

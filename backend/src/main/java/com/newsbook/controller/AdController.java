@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 
@@ -97,10 +98,39 @@ public class AdController {
         return ResponseEntity.notFound().build();
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateAd(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        AdDTO existing = adService.getAdById(id);
+        if (existing == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Long adminId = parseLongValue(request.get("adminId"));
+        if (adminId == null) {
+            return ResponseEntity.badRequest().body("adminId is required and must be numeric");
+        }
+        if (!adminId.equals(existing.getAdminId())) {
+            return ResponseEntity.status(403).body("You can only edit your own ads");
+        }
+
+        String content = request.get("content") instanceof String ? (String) request.get("content") : null;
+        String image = request.get("image") instanceof String ? (String) request.get("image") : null;
+        AdDTO updated = adService.updateAd(id, content, image);
+        return ResponseEntity.ok(updated);
+    }
+
     @PostMapping("/{id}/view")
-    public ResponseEntity<?> trackAdView(@PathVariable Long id) {
-        adService.trackAdView(id);
+    public ResponseEntity<?> trackAdView(@PathVariable Long id, HttpServletRequest request) {
+        adService.trackAdView(id, resolveClientIp(request));
         return ResponseEntity.ok("Ad view tracked");
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isEmpty()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @PostMapping("/{id}/click")

@@ -16,7 +16,17 @@ public class TileController {
     private TileService tileService;
 
     @GetMapping
-    public ResponseEntity<List<TileDTO>> getAllTiles() {
+    public ResponseEntity<List<TileDTO>> getAllTiles(
+            @RequestParam(value = "state", required = false) String state,
+            @RequestParam(value = "district", required = false) String district) {
+        boolean hasState = state != null && !state.trim().isEmpty();
+        boolean hasDistrict = district != null && !district.trim().isEmpty();
+        if (hasState && hasDistrict) {
+            return ResponseEntity.ok(tileService.getTilesByLocation(state.trim(), district.trim()));
+        }
+        if (hasDistrict) {
+            return ResponseEntity.ok(tileService.getTilesByDistrict(district.trim()));
+        }
         return ResponseEntity.ok(tileService.getAllTiles());
     }
 

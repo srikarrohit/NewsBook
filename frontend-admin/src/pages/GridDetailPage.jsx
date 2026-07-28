@@ -5,6 +5,16 @@ import { useTiles } from '../context/TileContext';
 import { apiGet } from '../constants/apiUtil';
 import { apiUploadImage } from '../constants/apiUploadImage';
 import { normalizeRole } from '../constants/roleUtils';
+import { API_BASE_URL } from '../constants/api';
+import indiaLocations from '../constants/indiaLocations.json';
+
+const STATES = Object.keys(indiaLocations).sort();
+const districtsFor = (state) => (state && indiaLocations[state] ? [...indiaLocations[state]].sort() : []);
+const formatImageUrl = (image) => {
+  if (!image) return null;
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `${API_BASE_URL}${image.startsWith('/') ? '' : '/'}${image}`;
+};
 
 export default function GridDetailPage() {
   const { user, isLoading } = useAuth();
@@ -21,19 +31,22 @@ export default function GridDetailPage() {
   const [gridName, setGridName] = useState('');
   const [gridTileId, setGridTileId] = useState('');
   const [gridPriority, setGridPriority] = useState('0');
+  const [gridState, setGridState] = useState('');
+  const [gridDistrict, setGridDistrict] = useState('');
   const [gridImageUrl, setGridImageUrl] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
+  const role = normalizeRole(user?.role);
+  const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
+
   useEffect(() => {
     if (isLoading) return;
-    const role = normalizeRole(user?.role);
-    const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
     if (!isSuperAdmin) {
       navigate(role === 'admin' && user?.tileId ? `/admin/${user.tileId}` : '/login', { replace: true });
     }
-  }, [isLoading, navigate, user]);
+  }, [isLoading, navigate, user, isSuperAdmin, role]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -47,6 +60,8 @@ export default function GridDetailPage() {
       setGridName(tile.name || '');
       setGridTileId(tile.tileId || '');
       setGridPriority(tile.priority != null ? String(tile.priority) : '0');
+      setGridState(tile.state || '');
+      setGridDistrict(tile.district || '');
       setGridImageUrl(tile.image || '');
       setSelectedImage(null);
     }
@@ -83,6 +98,8 @@ export default function GridDetailPage() {
         name: gridName.trim(),
         image: imageUrl,
         priority: Number(gridPriority) || 0,
+        state: gridState,
+        district: gridDistrict,
       });
       await fetchTiles();
       navigate('/superadmin');
@@ -133,9 +150,35 @@ export default function GridDetailPage() {
           <h2 className="section-title">Update grid</h2>
           <input className="input" placeholder="Grid id (tileId)" value={gridTileId} onChange={(e) => setGridTileId(e.target.value)} autoCapitalize="none" />
           <input className="input" placeholder="Grid name" value={gridName} onChange={(e) => setGridName(e.target.value)} />
+          <select
+            className="input"
+            value={gridState}
+            onChange={(e) => { setGridState(e.target.value); setGridDistrict(''); }}
+          >
+            <option value="">Select state</option>
+            {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select
+            className="input"
+            value={gridDistrict}
+            onChange={(e) => setGridDistrict(e.target.value)}
+            disabled={!gridState}
+          >
+            <option value="">Select district</option>
+            {districtsFor(gridState).map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
           <label className="upload-button">
             {selectedImage ? 'Change Image' : 'Upload New Image'}
-            <input type="file" accept="image/*" hidden onChange={(e) => setSelectedImage(e.target.files?.[0] || null)} />
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setSelectedImage(file);
+                e.target.value = '';
+              }}
+            />
           </label>
           {selectedImage ? (
             <div className="image-preview">
@@ -144,7 +187,7 @@ export default function GridDetailPage() {
             </div>
           ) : gridImageUrl ? (
             <div className="image-preview">
-              <img className="preview-image" src={gridImageUrl} alt="Current grid" />
+              <img className="preview-image" src={formatImageUrl(gridImageUrl)} alt="Current grid" />
             </div>
           ) : null}
           <input

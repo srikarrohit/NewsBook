@@ -53,6 +53,25 @@ public class PostService {
         return post.map(this::convertToDTO).orElse(null);
     }
 
+    public PostDTO updatePost(Long id, String content, String image, String tag) {
+        Optional<Post> optionalPost = postRepository.findById(id);
+        if (!optionalPost.isPresent()) {
+            return null;
+        }
+        Post post = optionalPost.get();
+        if (content != null && !content.trim().isEmpty()) {
+            post.setContent(content);
+        }
+        if (image != null && !image.trim().isEmpty()) {
+            post.setImage(image);
+        }
+        if (tag != null && !tag.trim().isEmpty()) {
+            post.setTag(tag);
+        }
+        Post updated = postRepository.save(post);
+        return convertToDTO(updated);
+    }
+
     public void deletePost(Long id) {
         postRepository.deleteById(id);
     }

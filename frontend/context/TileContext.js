@@ -1,5 +1,5 @@
 // context/TileContext.js
-import { createContext, useCallback, useContext, useState, useEffect } from 'react';
+import { createContext, useCallback, useContext, useState } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../constants/apiUtil';
 
 const TileContext = createContext(null);
@@ -8,20 +8,18 @@ export function TileProvider({ children }) {
   const [tiles, setTiles] = useState([]); // Array of tile objects from backend
   const [loading, setLoading] = useState(false);
 
-  const fetchTiles = useCallback(async () => {
+  const fetchTiles = useCallback(async (state, district) => {
     setLoading(true);
     try {
-      const data = await apiGet('/tiles');
+      const parts = [];
+      if (state) parts.push(`state=${encodeURIComponent(state)}`);
+      if (district) parts.push(`district=${encodeURIComponent(district)}`);
+      const data = await apiGet(parts.length ? `/tiles?${parts.join('&')}` : '/tiles');
       setTiles(data);
     } finally {
       setLoading(false);
     }
   }, []);
-
-  // Fetch all tiles on mount
-  useEffect(() => {
-    fetchTiles();
-  }, [fetchTiles]);
 
   const getTileById = (tileId) => tiles.find((t) => t.id === Number(tileId));
 
@@ -77,8 +75,18 @@ export function TileProvider({ children }) {
     }
   };
 
+  const updatePost = async (postId, adminId, post) => {
+    setLoading(true);
+    try {
+      // post: { content, image, tag }
+      return await apiPut(`/posts/${postId}`, { adminId, ...post });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <TileContext.Provider value={{ tiles, loading, fetchTiles, getTileById, createTile, updateTile, deleteTile, getPostsByTile, addPost }}>
+    <TileContext.Provider value={{ tiles, loading, fetchTiles, getTileById, createTile, updateTile, deleteTile, getPostsByTile, addPost, updatePost }}>
       {children}
     </TileContext.Provider>
   );

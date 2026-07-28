@@ -8,6 +8,11 @@ import { useTiles } from '../../context/TileContext';
 import { apiGet } from '../../constants/apiUtil';
 import { apiUploadImage } from '../../constants/apiUploadImage';
 import { normalizeRole } from '../../constants/roleUtils';
+import LocationSelect from '../../components/LocationSelect';
+import indiaLocations from '../../constants/indiaLocations.json';
+
+const STATES = Object.keys(indiaLocations).sort();
+const districtsFor = (state) => (state && indiaLocations[state] ? [...indiaLocations[state]].sort() : []);
 
 export default function GridDetailPage() {
   const { user, isLoading } = useAuth();
@@ -24,19 +29,22 @@ export default function GridDetailPage() {
   const [gridName, setGridName] = useState('');
   const [gridTileId, setGridTileId] = useState('');
   const [gridPriority, setGridPriority] = useState('0');
+  const [gridState, setGridState] = useState('');
+  const [gridDistrict, setGridDistrict] = useState('');
   const [gridImageUrl, setGridImageUrl] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const role = normalizeRole(user?.role);
+  const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
+
   useEffect(() => {
     if (!isLoading) {
-      const role = normalizeRole(user?.role);
-      const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
       if (!isSuperAdmin) {
         router.replace(role === 'admin' && user?.tileId ? `/admin/${user.tileId}` : '/login');
       }
     }
-  }, [isLoading, router, user]);
+  }, [isLoading, router, user, isSuperAdmin, role]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -50,6 +58,8 @@ export default function GridDetailPage() {
       setGridName(tile.name || '');
       setGridTileId(tile.tileId || '');
       setGridPriority(tile.priority != null ? String(tile.priority) : '0');
+      setGridState(tile.state || '');
+      setGridDistrict(tile.district || '');
       setGridImageUrl(tile.image || '');
       setSelectedImage(null);
     }
@@ -72,8 +82,7 @@ export default function GridDetailPage() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -103,6 +112,8 @@ export default function GridDetailPage() {
         name: gridName.trim(),
         image: imageUrl,
         priority: Number(gridPriority) || 0,
+        state: gridState,
+        district: gridDistrict,
       });
       Alert.alert('Grid updated', 'Grid metadata and image updated successfully.');
       await fetchTiles();
@@ -165,19 +176,32 @@ export default function GridDetailPage() {
             value={gridName}
             onChangeText={setGridName}
           />
+          <LocationSelect
+            label="Select state"
+            value={gridState}
+            options={STATES}
+            onChange={(s) => { setGridState(s); setGridDistrict(''); }}
+          />
+          <LocationSelect
+            label="Select district"
+            value={gridDistrict}
+            options={districtsFor(gridState)}
+            onChange={setGridDistrict}
+            disabled={!gridState}
+          />
           <TouchableOpacity style={[styles.button, styles.uploadButton]} onPress={pickImage} disabled={loading}>
             <Text style={styles.buttonText}>{selectedImage ? 'Change Image' : 'Upload New Image'}</Text>
           </TouchableOpacity>
           {selectedImage ? (
             <View style={styles.imagePreview}>
-              <Image source={{ uri: selectedImage }} style={styles.previewImage} />
+              <Image source={{ uri: selectedImage }} style={styles.previewImage} resizeMode="contain" />
               <TouchableOpacity style={styles.removeButton} onPress={() => setSelectedImage(null)}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
           ) : gridImageUrl ? (
             <View style={styles.imagePreview}>
-              <Image source={{ uri: gridImageUrl }} style={styles.previewImage} />
+              <Image source={{ uri: gridImageUrl }} style={styles.previewImage} resizeMode="contain" />
             </View>
           ) : null}
           <TextInput
@@ -223,7 +247,7 @@ const styles = StyleSheet.create({
   tileName: { fontSize: 16, fontWeight: '800', color: '#102a43', marginBottom: 4 },
   tileDetails: { fontSize: 14, color: '#334e68' },
   imagePreview: { marginBottom: 12, position: 'relative' },
-  previewImage: { width: '100%', height: 180, borderRadius: 16 },
+  previewImage: { width: '100%', height: 180, borderRadius: 16, backgroundColor: '#f0f0f0' },
   removeButton: { position: 'absolute', top: 8, right: 8, backgroundColor: '#ff5a5f', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   removeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   uploadButton: { backgroundColor: '#0f6d68', marginBottom: 12 },

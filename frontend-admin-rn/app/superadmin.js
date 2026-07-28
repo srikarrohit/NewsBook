@@ -8,11 +8,20 @@ import { apiGet, apiPost } from '../constants/apiUtil';
 import { apiUploadImage } from '../constants/apiUploadImage';
 import { useTiles } from '../context/TileContext';
 import { normalizeRole } from '../constants/roleUtils';
+import LocationSelect from '../components/LocationSelect';
+import indiaLocations from '../constants/indiaLocations.json';
+import { IMAGE_ASPECT } from '../constants/imageAspect';
+
+const STATES = Object.keys(indiaLocations).sort();
+const districtsFor = (state) => (state && indiaLocations[state] ? [...indiaLocations[state]].sort() : []);
 
 export default function SuperAdminPage() {
   const { user, logout, isLoading } = useAuth();
   const { tiles, fetchTiles } = useTiles();
   const router = useRouter();
+
+  const role = normalizeRole(user?.role);
+  const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
 
   const [adminAccounts, setAdminAccounts] = useState([]);
   const [adminAccountsLoading, setAdminAccountsLoading] = useState(false);
@@ -21,28 +30,30 @@ export default function SuperAdminPage() {
   const [newGridName, setNewGridName] = useState('');
   const [selectedGridImage, setSelectedGridImage] = useState(null);
   const [newGridPriority, setNewGridPriority] = useState('1');
+  const [newGridState, setNewGridState] = useState('');
+  const [newGridDistrict, setNewGridDistrict] = useState('');
   const [newAdminUsername, setNewAdminUsername] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [existingTileId, setExistingTileId] = useState('');
   const [existingAdminUsername, setExistingAdminUsername] = useState('');
   const [existingAdminPassword, setExistingAdminPassword] = useState('');
+
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!isLoading) {
-      const role = normalizeRole(user?.role);
-      const isSuperAdmin = role === 'super_admin' || user?.username?.toLowerCase() === 'superadmin';
       if (!isSuperAdmin) {
         router.replace(role === 'admin' && user?.tileId ? `/admin/${user.tileId}` : '/login');
       }
     }
-  }, [isLoading, router, user]);
+  }, [isLoading, router, user, isSuperAdmin, role]);
 
   useEffect(() => {
     if (!isLoading) {
       fetchTiles();
       fetchAdminAccounts();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, fetchTiles]);
 
   const fetchAdminAccounts = async () => {
@@ -63,7 +74,7 @@ export default function SuperAdminPage() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [4, 3],
+        aspect: IMAGE_ASPECT,
         quality: 0.8,
       });
 
@@ -76,8 +87,8 @@ export default function SuperAdminPage() {
   };
 
   const registerGrid = async () => {
-    if (!newGridName.trim() || !newAdminUsername.trim() || !newAdminPassword.trim() || !selectedGridImage) {
-      return Alert.alert('Validation', 'Enter a grid name, upload an image, and provide admin credentials.');
+    if (!newGridName.trim() || !newAdminUsername.trim() || !newAdminPassword.trim() || !selectedGridImage || !newGridState || !newGridDistrict) {
+      return Alert.alert('Validation', 'Enter a grid name, state, district, upload an image, and provide admin credentials.');
     }
 
     setLoading(true);
@@ -91,6 +102,8 @@ export default function SuperAdminPage() {
         tileName: newGridName.trim(),
         tileImage: imageUrl,
         priority: Number(newGridPriority) || 0,
+        state: newGridState,
+        district: newGridDistrict,
         createdBy: user.username,
       });
       const createdTile = Array.isArray(res) && res[1] ? res[1] : res;
@@ -100,6 +113,8 @@ export default function SuperAdminPage() {
       setNewAdminUsername('');
       setNewAdminPassword('');
       setNewGridPriority('1');
+      setNewGridState('');
+      setNewGridDistrict('');
       fetchTiles();
     } catch (error) {
       Alert.alert('Create failed', error.message || 'Unable to create grid.');
@@ -125,6 +140,7 @@ export default function SuperAdminPage() {
       setExistingAdminUsername('');
       setExistingAdminPassword('');
       setExistingTileId('');
+      fetchAdminAccounts();
     } catch (error) {
       Alert.alert('Create failed', error.message || 'Unable to create admin user.');
     } finally {
@@ -145,6 +161,19 @@ export default function SuperAdminPage() {
             placeholder="Grid name"
             value={newGridName}
             onChangeText={setNewGridName}
+          />
+          <LocationSelect
+            label="Select state"
+            value={newGridState}
+            options={STATES}
+            onChange={(s) => { setNewGridState(s); setNewGridDistrict(''); }}
+          />
+          <LocationSelect
+            label="Select district"
+            value={newGridDistrict}
+            options={districtsFor(newGridState)}
+            onChange={setNewGridDistrict}
+            disabled={!newGridState}
           />
           <TouchableOpacity style={[styles.button, styles.uploadButton]} onPress={pickGridImage} disabled={loading}>
             <Text style={styles.buttonText}>{selectedGridImage ? 'Change Image' : 'Upload Image'}</Text>
@@ -221,6 +250,7 @@ export default function SuperAdminPage() {
                 <Text style={styles.tileName}>{tile.name}</Text>
                 <Text style={styles.tileDetails}>Database ID: {tile.id}</Text>
                 <Text style={styles.tileDetails}>Tile ID: {tile.tileId}</Text>
+                <Text style={styles.tileDetails}>Location: {tile.district ?? '—'}, {tile.state ?? '—'}</Text>
                 <Text style={styles.tileDetails}>Priority: {tile.priority ?? 0}</Text>
                 <Text style={styles.tileHint}>Tap to view admin account &amp; update</Text>
               </TouchableOpacity>
@@ -240,6 +270,7 @@ export default function SuperAdminPage() {
                 <Text style={styles.tileName}>{account.username}</Text>
                 <Text style={styles.tileDetails}>Password: {account.password}</Text>
                 <Text style={styles.tileDetails}>Tile ID: {account.tileId ?? '—'}</Text>
+                <Text style={styles.tileDetails}>Location: {account.district ?? '—'}, {account.state ?? '—'}</Text>
               </View>
             ))
           )}

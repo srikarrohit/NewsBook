@@ -1,30 +1,42 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useAds } from '../../context/AdsContext';
 import { useTiles } from '../../context/TileContext';
+import { apiGet, apiPut } from '../../constants/apiUtil';
+import { API_BASE_URL } from '../../constants/api';
 import { apiUploadImage } from '../../constants/apiUploadImage';
 import { normalizeRole } from '../../constants/roleUtils';
+import { IMAGE_ASPECT, IMAGE_ASPECT_RATIO } from '../../constants/imageAspect';
 
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
+const MAX_WORDS = 80;
+const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
+const formatImageUrl = (image) => {
+  if (!image) return null;
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `${API_BASE_URL}${image.startsWith('/') ? '' : '/'}${image}`;
+};
 
 export default function ComposePage() {
   const { user, isLoading } = useAuth();
   const { addPost } = useTiles();
   const { addAd } = useAds();
-  const { tileId } = useLocalSearchParams();
+  const { tileId, editType: editTypeParam, editId } = useLocalSearchParams();
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
-  const feedImageAspect = width / (height / 2);
 
-  const [selectedMode, setSelectedMode] = useState('post');
+  const editType = editTypeParam === 'ad' ? 'ad' : editTypeParam === 'post' ? 'post' : null;
+  const isEditing = Boolean(editType && editId);
+
+  const [selectedMode, setSelectedMode] = useState(editType === 'ad' ? 'ad' : 'post');
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0]);
   const [content, setContent] = useState('');
   const [adContent, setAdContent] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [existingImageUrl, setExistingImageUrl] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -36,12 +48,30 @@ export default function ComposePage() {
     }
   }, [isLoading, router, tileId, user]);
 
+  useEffect(() => {
+    if (!isEditing) return;
+    (async () => {
+      try {
+        const data = await apiGet(editType === 'ad' ? `/ads/${editId}` : `/posts/${editId}`);
+        if (editType === 'ad') {
+          setAdContent(data.content || '');
+        } else {
+          setContent(data.content || '');
+          setSelectedTag(TAG_OPTIONS.includes(data.tag) ? data.tag : TAG_OPTIONS[0]);
+        }
+        setExistingImageUrl(data.image || null);
+      } catch (error) {
+        Alert.alert('Unable to load', error.message || 'Try again');
+      }
+    })();
+  }, [isEditing, editType, editId]);
+
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [Math.round(width), Math.round(height / 2)],
+        aspect: IMAGE_ASPECT,
         quality: 1,
       });
 
@@ -55,28 +85,44 @@ export default function ComposePage() {
 
   const activeText = selectedMode === 'post' ? content : adContent;
   const setActiveText = selectedMode === 'post' ? setContent : setAdContent;
+  const wordCount = countWords(activeText);
+  const overWordLimit = wordCount > MAX_WORDS;
 
   const handlePublish = async () => {
     if (!activeText.trim()) {
       return Alert.alert('Please enter some content');
     }
-    if (!selectedImage) {
+    if (overWordLimit) {
+      return Alert.alert('Too long', `Please keep it to ${MAX_WORDS} words or fewer (currently ${wordCount}).`);
+    }
+    if (!selectedImage && !(isEditing && existingImageUrl)) {
       return Alert.alert('Please select an image');
     }
     setLoading(true);
     try {
-      const uploadRes = await apiUploadImage(selectedImage);
-      const imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
+      let imageUrl = existingImageUrl;
+      if (selectedImage) {
+        const uploadRes = await apiUploadImage(selectedImage);
+        imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
+      }
 
-      if (selectedMode === 'post') {
+      if (isEditing) {
+        if (editType === 'ad') {
+          await apiPut(`/ads/${editId}`, { adminId: user.id, content: adContent, image: imageUrl });
+        } else {
+          await apiPut(`/posts/${editId}`, { adminId: user.id, content, image: imageUrl, tag: selectedTag });
+        }
+        Alert.alert('Success', `${editType === 'ad' ? 'Ad' : 'Post'} updated successfully`);
+      } else if (selectedMode === 'post') {
         await addPost(tileId, user.id, { content, image: imageUrl, tag: selectedTag });
+        Alert.alert('Success', 'Post published successfully');
       } else {
         await addAd(tileId, user.id, { content: adContent, image: imageUrl, tag: 'admin ad' });
+        Alert.alert('Success', 'Ad published successfully');
       }
-      Alert.alert('Success', `${selectedMode === 'post' ? 'Post' : 'Ad'} published successfully`);
       router.back();
     } catch (error) {
-      Alert.alert('Publish failed', error.message || 'Try again');
+      Alert.alert(isEditing ? 'Save failed' : 'Publish failed', error.message || 'Try again');
     } finally {
       setLoading(false);
     }
@@ -89,23 +135,27 @@ export default function ComposePage() {
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.heading}>Write a Post</Text>
-        <Text style={styles.subheading}>Compose your story and see exactly how it will look before publishing.</Text>
+        <Text style={styles.heading}>{isEditing ? `Edit ${selectedMode === 'ad' ? 'Ad' : 'Post'}` : 'Write a Post'}</Text>
+        <Text style={styles.subheading}>
+          {isEditing ? 'Update the content and see the preview before saving.' : 'Compose your story and see exactly how it will look before publishing.'}
+        </Text>
 
-        <View style={styles.modeRow}>
-          <TouchableOpacity
-            style={[styles.modeButton, selectedMode === 'post' && styles.modeButtonActive]}
-            onPress={() => setSelectedMode('post')}
-          >
-            <Text style={[styles.modeText, selectedMode === 'post' && styles.modeTextActive]}>Post</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.modeButton, selectedMode === 'ad' && styles.modeButtonActive]}
-            onPress={() => setSelectedMode('ad')}
-          >
-            <Text style={[styles.modeText, selectedMode === 'ad' && styles.modeTextActive]}>Ad</Text>
-          </TouchableOpacity>
-        </View>
+        {!isEditing && (
+          <View style={styles.modeRow}>
+            <TouchableOpacity
+              style={[styles.modeButton, selectedMode === 'post' && styles.modeButtonActive]}
+              onPress={() => setSelectedMode('post')}
+            >
+              <Text style={[styles.modeText, selectedMode === 'post' && styles.modeTextActive]}>Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeButton, selectedMode === 'ad' && styles.modeButtonActive]}
+              onPress={() => setSelectedMode('ad')}
+            >
+              <Text style={[styles.modeText, selectedMode === 'ad' && styles.modeTextActive]}>Ad</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {selectedMode === 'post' && (
           <View style={styles.section}>
@@ -127,7 +177,7 @@ export default function ComposePage() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Content</Text>
           <TouchableOpacity style={styles.uploadButton} onPress={pickImage} disabled={loading}>
-            <Text style={styles.uploadButtonText}>{selectedImage ? 'Change Image' : 'Upload Image'}</Text>
+            <Text style={styles.uploadButtonText}>{selectedImage || existingImageUrl ? 'Change Image' : 'Upload Image'}</Text>
           </TouchableOpacity>
           <TextInput
             placeholder={selectedMode === 'post' ? 'Write your news story...' : 'Write your ad copy...'}
@@ -136,6 +186,7 @@ export default function ComposePage() {
             style={styles.input}
             multiline
           />
+          <Text style={overWordLimit ? styles.wordCountError : styles.wordCountText}>{wordCount} / {MAX_WORDS} words</Text>
           <View style={styles.hintBox}>
             <Text style={styles.hintText}>🎙️ Tip: tap the microphone icon on your keyboard to dictate this text.</Text>
           </View>
@@ -145,10 +196,10 @@ export default function ComposePage() {
           <Text style={styles.sectionTitle}>Preview</Text>
           <View style={styles.previewCard}>
             <View style={styles.previewImageWrap}>
-              {selectedImage ? (
-                <Image source={{ uri: selectedImage }} style={[styles.previewImage, { aspectRatio: feedImageAspect }]} resizeMode="cover" />
+              {selectedImage || existingImageUrl ? (
+                <Image source={{ uri: selectedImage || formatImageUrl(existingImageUrl) }} style={[styles.previewImage, { aspectRatio: IMAGE_ASPECT_RATIO }]} resizeMode="cover" />
               ) : (
-                <View style={[styles.previewImagePlaceholder, { aspectRatio: feedImageAspect }]}>
+                <View style={[styles.previewImagePlaceholder, { aspectRatio: IMAGE_ASPECT_RATIO }]}>
                   <Text style={styles.previewPlaceholderText}>No image selected</Text>
                 </View>
               )}
@@ -164,8 +215,14 @@ export default function ComposePage() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.submitButton} onPress={handlePublish} disabled={loading}>
-          <Text style={styles.submitText}>{loading ? 'Publishing...' : selectedMode === 'post' ? 'Publish Post' : 'Publish Ad'}</Text>
+        <TouchableOpacity style={styles.submitButton} onPress={handlePublish} disabled={loading || overWordLimit}>
+          <Text style={styles.submitText}>
+            {loading
+              ? (isEditing ? 'Saving...' : 'Publishing...')
+              : isEditing
+                ? `Save ${selectedMode === 'ad' ? 'Ad' : 'Post'}`
+                : selectedMode === 'post' ? 'Publish Post' : 'Publish Ad'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -221,6 +278,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     textAlignVertical: 'top',
+  },
+  wordCountText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#64748b',
+  },
+  wordCountError: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '700',
   },
   hintBox: {
     marginTop: 12,

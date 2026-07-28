@@ -1,6 +1,6 @@
 // context/AdsContext.js
 import { createContext, useContext, useState } from 'react';
-import { apiGet, apiPost } from '../constants/apiUtil';
+import { apiGet, apiPost, apiPut } from '../constants/apiUtil';
 
 const AdsContext = createContext(null);
 
@@ -12,6 +12,16 @@ export function AdsProvider({ children }) {
     try {
       // adData: { content, image }
       return await apiPost('/ads', { tileId, adminId, ...adData });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateAd = async (adId, adminId, adData) => {
+    setLoading(true);
+    try {
+      // adData: { content, image }
+      return await apiPut(`/ads/${adId}`, { adminId, ...adData });
     } finally {
       setLoading(false);
     }
@@ -35,17 +45,44 @@ export function AdsProvider({ children }) {
     }
   };
 
-  // Tracking endpoints would need to be implemented in backend for real tracking
-  const trackAdView = async (tileId, adId) => {};
-  const trackAdClick = async (tileId, adId) => {};
-  const trackAdDismissal = async (tileId, adId) => {};
-  const trackAdCharge = async (tileId, adId) => {};
+  const trackAdView = async (adId) => {
+    try {
+      await apiPost(`/ads/${adId}/view`, {});
+    } catch (error) {
+      console.warn('Failed to track ad view:', error);
+    }
+  };
+
+  const trackAdClick = async (adId) => {
+    try {
+      await apiPost(`/ads/${adId}/click`, {});
+    } catch (error) {
+      console.warn('Failed to track ad click:', error);
+    }
+  };
+
+  const trackAdDismissal = async (adId) => {
+    try {
+      await apiPost(`/ads/${adId}/dismissal`, {});
+    } catch (error) {
+      console.warn('Failed to track ad dismissal:', error);
+    }
+  };
+
+  const trackAdCharge = async (adId) => {
+    try {
+      await apiPost(`/ads/${adId}/charge`, {});
+    } catch (error) {
+      console.warn('Failed to track ad charge:', error);
+    }
+  };
 
   return (
     <AdsContext.Provider
       value={{
         loading,
         addAd,
+        updateAd,
         getAdsByTile,
         getAdsByAdmin,
         trackAdView,

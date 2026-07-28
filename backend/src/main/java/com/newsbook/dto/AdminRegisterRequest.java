@@ -6,6 +6,8 @@ public class AdminRegisterRequest {
     private String tileName;
     private String tileImage;
     private Integer priority;
+    private String state;
+    private String district;
     private String createdBy;
 
     public AdminRegisterRequest() {}
@@ -56,5 +58,21 @@ public class AdminRegisterRequest {
 
     public void setCreatedBy(String createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public String getDistrict() {
+        return district;
+    }
+
+    public void setDistrict(String district) {
+        this.district = district;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public void setState(String state) {
+        this.state = state;
     }
 }

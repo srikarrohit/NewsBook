@@ -1,8 +1,10 @@
 // app/index.js
+import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, FlatList, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useLocationContext } from '../context/LocationContext';
 import { useTiles } from '../context/TileContext';
 import { API_BASE_URL } from '../constants/api';
 
@@ -14,14 +16,35 @@ const formatImageUrl = (image) => {
 
 export default function Home() {
   const { user, logout } = useAuth();
-  const { tiles, loading } = useTiles();
+  const { location, hasLoadedLocation } = useLocationContext();
+  const { tiles, loading, fetchTiles } = useTiles();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!hasLoadedLocation) return;
+    if (!location) {
+      router.replace('/location');
+      return;
+    }
+    fetchTiles(location.state, location.district);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedLocation, location?.state, location?.district]);
 
   const sortedTiles = [...tiles].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
   const handleTilePress = (tileId) => {
     router.push(`/post/${tileId}`);
   };
+
+  if (!hasLoadedLocation || !location) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color="#1f2a45" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -32,6 +55,9 @@ export default function Home() {
         <Text style={styles.heroDescription}>
           Explore curated newspapers in a premium tile gallery.
         </Text>
+        <TouchableOpacity style={styles.locationPill} onPress={() => router.push('/location')}>
+          <Text style={styles.locationPillText}>📍 {location.district}, {location.state}</Text>
+        </TouchableOpacity>
       </View>
 
       {loading && sortedTiles.length === 0 ? (
@@ -40,7 +66,7 @@ export default function Home() {
         </View>
       ) : sortedTiles.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No newspapers available yet.</Text>
+          <Text style={styles.emptyText}>No newspapers available in your area yet.</Text>
         </View>
       ) : (
         <FlatList
@@ -101,8 +127,20 @@ const styles = StyleSheet.create({
     color: '#cbd5f1',
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: 16,
     maxWidth: '94%',
+  },
+  locationPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  locationPillText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   grid: {
     padding: 16,
