@@ -9,31 +9,7 @@ on:
       - '.github/workflows/deploy.yml'
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      admin: ${{ steps.filter.outputs.admin }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Detect changed apps
-        id: filter
-        run: |
-          if [ -z "${{ github.event.before }}" ] || ! git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
-            CHANGED=$(git diff --name-only "$(git rev-parse HEAD^)" HEAD)
-          else
-            CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
-          fi
-          echo "$CHANGED"
-          echo "backend=$(echo "$CHANGED" | grep -q '^backend/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "admin=$(echo "$CHANGED" | grep -q '^frontend-admin/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
-
   backend:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,8 +65,6 @@ jobs:
             pm2 status newsbook-backend
 
   admin-web:
-    needs: changes
-    if: needs.changes.outputs.admin == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
