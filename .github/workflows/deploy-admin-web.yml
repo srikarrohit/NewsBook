@@ -38,7 +38,7 @@ jobs:
           target: '/home/ec2-user/deploy-tmp-admin'
           strip_components: 2
 
-      - name: Publish to nginx root
+      - name: Provision host + publish
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -46,7 +46,29 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
+
+            # --- one-time provisioning, safe to re-run every deploy ---
+            command -v nginx >/dev/null 2>&1 || sudo dnf install -y nginx
+            sudo systemctl enable --now nginx
             sudo mkdir -p /var/www/newsbook-admin
+
+            if [ ! -f /etc/nginx/conf.d/admin-newsbooktech.conf ]; then
+              sudo tee /etc/nginx/conf.d/admin-newsbooktech.conf > /dev/null <<'NGINX'
+            server {
+                listen 80;
+                server_name admin.newsbooktech.com;
+                root /var/www/newsbook-admin;
+                index index.html;
+
+                location / {
+                    try_files $uri $uri/ /index.html;
+                }
+            }
+            NGINX
+              sudo nginx -t && sudo systemctl reload nginx
+            fi
+
+            # --- deploy ---
             sudo rm -rf /var/www/newsbook-admin/*
             sudo cp -r /home/ec2-user/deploy-tmp-admin/* /var/www/newsbook-admin/
             rm -rf /home/ec2-user/deploy-tmp-admin/*
