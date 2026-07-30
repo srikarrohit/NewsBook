@@ -35,7 +35,7 @@ jobs:
           target: '/home/ec2-user/deploy-tmp'
           strip_components: 2
 
-      - name: Restart backend service
+      - name: Restart backend via PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -44,10 +44,10 @@ jobs:
           script: |
             set -e
             JAR=$(ls -t /home/ec2-user/deploy-tmp/*.jar | head -n1)
-            sudo systemctl stop newsbook-backend || true
             mkdir -p /home/ec2-user/newsbook-backend
             cp "$JAR" /home/ec2-user/newsbook-backend/app.jar
             rm -f /home/ec2-user/deploy-tmp/*.jar
-            sudo systemctl start newsbook-backend
+            pm2 startOrRestart /home/ec2-user/newsbook-backend/ecosystem.config.js
+            pm2 save
             sleep 2
-            sudo systemctl status newsbook-backend --no-pager
+            pm2 status newsbook-backend
