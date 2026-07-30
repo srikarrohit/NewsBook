@@ -94,7 +94,17 @@ jobs:
           target: '/home/ec2-user/deploy-tmp-admin'
           strip_components: 2
 
-      - name: Publish to nginx root
+      - name: Upload ecosystem file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'frontend-admin/ecosystem.config.js'
+          target: '/home/ec2-user/deploy-tmp-admin'
+          strip_components: 1
+
+      - name: Run with PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -102,7 +112,17 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            sudo mkdir -p /var/www/newsbook-admin
-            sudo rm -rf /var/www/newsbook-admin/*
-            sudo cp -r /home/ec2-user/deploy-tmp-admin/* /var/www/newsbook-admin/
+            command -v serve >/dev/null 2>&1 || sudo npm install -g serve
+
+            mkdir -p /home/ec2-user/newsbook-admin-web
+            mv /home/ec2-user/deploy-tmp-admin/ecosystem.config.js /home/ec2-user/newsbook-admin-web/ecosystem.config.js
+
+            rm -rf /home/ec2-user/newsbook-admin-web/dist
+            mkdir -p /home/ec2-user/newsbook-admin-web/dist
+            mv /home/ec2-user/deploy-tmp-admin/* /home/ec2-user/newsbook-admin-web/dist/
             rm -rf /home/ec2-user/deploy-tmp-admin/*
+
+            pm2 startOrRestart /home/ec2-user/newsbook-admin-web/ecosystem.config.js
+            pm2 save
+            sleep 2
+            pm2 status newsbook-admin-web
