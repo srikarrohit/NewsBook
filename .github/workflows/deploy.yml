@@ -1,0 +1,134 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'backend/**'
+      - 'frontend-admin/**'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      admin: ${{ steps.filter.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed apps
+        id: filter
+        run: |
+          if [ -z "${{ github.event.before }}" ] || ! git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
+            CHANGED=$(git diff --name-only "$(git rev-parse HEAD^)" HEAD)
+          else
+            CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
+          fi
+          echo "$CHANGED"
+          echo "backend=$(echo "$CHANGED" | grep -q '^backend/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "admin=$(echo "$CHANGED" | grep -q '^frontend-admin/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Build with Maven
+        working-directory: backend
+        run: mvn -B clean package
+
+      - name: Upload jar to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'backend/target/*.jar'
+          target: '/home/ec2-user/deploy-tmp'
+          strip_components: 2
+
+      - name: Upload ecosystem file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'backend/ecosystem.config.js'
+          target: '/home/ec2-user/deploy-tmp'
+          strip_components: 1
+
+      - name: Run with PM2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            mkdir -p /home/ec2-user/newsbook-backend
+            mv /home/ec2-user/deploy-tmp/ecosystem.config.js /home/ec2-user/newsbook-backend/ecosystem.config.js
+            JAR=$(ls -t /home/ec2-user/deploy-tmp/*.jar | head -n1)
+            cp "$JAR" /home/ec2-user/newsbook-backend/app.jar
+            rm -f /home/ec2-user/deploy-tmp/*.jar
+            pm2 startOrRestart /home/ec2-user/newsbook-backend/ecosystem.config.js
+            pm2 save
+            sleep 2
+            pm2 status newsbook-backend
+
+  admin-web:
+    needs: changes
+    if: needs.changes.outputs.admin == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend-admin/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend-admin
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend-admin
+        run: npm run build
+
+      - name: Upload build to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'frontend-admin/dist/*'
+          target: '/home/ec2-user/deploy-tmp-admin'
+          strip_components: 2
+
+      - name: Publish to nginx root
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            sudo mkdir -p /var/www/newsbook-admin
+            sudo rm -rf /var/www/newsbook-admin/*
+            sudo cp -r /home/ec2-user/deploy-tmp-admin/* /var/www/newsbook-admin/
+            rm -rf /home/ec2-user/deploy-tmp-admin/*
