@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'newsbook-admin-web',
-    script: 'serve',
+    script: '/usr/bin/serve',
     args: '-s dist -l 4173',
     cwd: '/home/ec2-user/newsbook-admin-web',
     interpreter: 'none',

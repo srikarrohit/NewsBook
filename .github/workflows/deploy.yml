@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'frontend-admin/**'
+      - 'deploy/**'
       - '.github/workflows/deploy.yml'
 
 jobs:
@@ -46,6 +47,16 @@ jobs:
           target: '/home/ec2-user/deploy-tmp'
           strip_components: 1
 
+      - name: Upload nginx config to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'deploy/nginx/newsbooktech.conf'
+          target: '/home/ec2-user/deploy-tmp'
+          strip_components: 2
+
       - name: Run with PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -54,6 +65,12 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
+            command -v nginx >/dev/null 2>&1 || sudo dnf install -y nginx
+            sudo systemctl enable --now nginx
+            sudo cp /home/ec2-user/deploy-tmp/newsbooktech.conf /etc/nginx/conf.d/newsbooktech.conf
+            rm -f /home/ec2-user/deploy-tmp/newsbooktech.conf
+            sudo nginx -t && sudo systemctl reload nginx
+
             mkdir -p /home/ec2-user/newsbook-backend
             mv /home/ec2-user/deploy-tmp/ecosystem.config.js /home/ec2-user/newsbook-backend/ecosystem.config.js
             JAR=$(ls -t /home/ec2-user/deploy-tmp/*.jar | head -n1)
@@ -104,6 +121,16 @@ jobs:
           target: '/home/ec2-user/deploy-tmp-admin'
           strip_components: 1
 
+      - name: Upload nginx config to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'deploy/nginx/admin-newsbooktech.conf'
+          target: '/home/ec2-user/deploy-tmp-admin'
+          strip_components: 2
+
       - name: Run with PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -112,6 +139,12 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
+            command -v nginx >/dev/null 2>&1 || sudo dnf install -y nginx
+            sudo systemctl enable --now nginx
+            sudo cp /home/ec2-user/deploy-tmp-admin/admin-newsbooktech.conf /etc/nginx/conf.d/admin-newsbooktech.conf
+            rm -f /home/ec2-user/deploy-tmp-admin/admin-newsbooktech.conf
+            sudo nginx -t && sudo systemctl reload nginx
+
             command -v serve >/dev/null 2>&1 || sudo npm install -g serve
 
             mkdir -p /home/ec2-user/newsbook-admin-web
