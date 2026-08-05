@@ -71,6 +71,16 @@ jobs:
             rm -f /home/ec2-user/deploy-tmp/newsbooktech.conf
             sudo nginx -t && sudo systemctl reload nginx
 
+            command -v certbot >/dev/null 2>&1 || {
+              sudo dnf install -y python3 augeas-libs
+              sudo python3 -m venv /opt/certbot
+              sudo /opt/certbot/bin/pip install --upgrade pip
+              sudo /opt/certbot/bin/pip install certbot certbot-nginx
+              sudo ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+            }
+            sudo certbot --nginx -n --agree-tos -m mohandiaries58@gmail.com \
+              -d newsbooktech.com -d www.newsbooktech.com --redirect
+
             mkdir -p /home/ec2-user/newsbook-backend
             mv /home/ec2-user/deploy-tmp/ecosystem.config.js /home/ec2-user/newsbook-backend/ecosystem.config.js
             JAR=$(ls -t /home/ec2-user/deploy-tmp/*.jar | head -n1)
@@ -82,6 +92,8 @@ jobs:
             pm2 status newsbook-backend
 
   admin-web:
+    needs: backend
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -144,6 +156,16 @@ jobs:
             sudo cp /home/ec2-user/deploy-tmp-admin/admin-newsbooktech.conf /etc/nginx/conf.d/admin-newsbooktech.conf
             rm -f /home/ec2-user/deploy-tmp-admin/admin-newsbooktech.conf
             sudo nginx -t && sudo systemctl reload nginx
+
+            command -v certbot >/dev/null 2>&1 || {
+              sudo dnf install -y python3 augeas-libs
+              sudo python3 -m venv /opt/certbot
+              sudo /opt/certbot/bin/pip install --upgrade pip
+              sudo /opt/certbot/bin/pip install certbot certbot-nginx
+              sudo ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+            }
+            sudo certbot --nginx -n --agree-tos -m mohandiaries58@gmail.com \
+              -d admin.newsbooktech.com --redirect
 
             command -v serve >/dev/null 2>&1 || sudo npm install -g serve
 
