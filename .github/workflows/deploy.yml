@@ -57,6 +57,16 @@ jobs:
           target: '/home/ec2-user/deploy-tmp'
           strip_components: 2
 
+      - name: Upload public website to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'deploy/website/*.html'
+          target: '/home/ec2-user/deploy-tmp-site'
+          strip_components: 2
+
       - name: Run with PM2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -69,6 +79,11 @@ jobs:
             sudo systemctl enable --now nginx
             sudo cp /home/ec2-user/deploy-tmp/newsbooktech.conf /etc/nginx/conf.d/newsbooktech.conf
             rm -f /home/ec2-user/deploy-tmp/newsbooktech.conf
+
+            sudo mkdir -p /var/www/newsbook-site
+            sudo cp /home/ec2-user/deploy-tmp-site/*.html /var/www/newsbook-site/
+            rm -rf /home/ec2-user/deploy-tmp-site
+
             sudo nginx -t && sudo systemctl reload nginx
 
             command -v certbot >/dev/null 2>&1 || {

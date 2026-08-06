@@ -55,9 +55,14 @@ export default function Home() {
         <Text style={styles.heroDescription}>
           Explore curated newspapers in a premium tile gallery.
         </Text>
-        <TouchableOpacity style={styles.locationPill} onPress={() => router.push('/location')}>
-          <Text style={styles.locationPillText}>📍 {location.district}, {location.state}</Text>
-        </TouchableOpacity>
+        <View style={styles.pillRow}>
+          <TouchableOpacity style={styles.locationPill} onPress={() => router.push('/location')}>
+            <Text style={styles.locationPillText}>📍 {location.district}, {location.state}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.locationPill} onPress={() => router.push('/contact')}>
+            <Text style={styles.locationPillText}>Contact Us</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading && sortedTiles.length === 0 ? (
@@ -129,6 +134,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 16,
     maxWidth: '94%',
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   locationPill: {
     alignSelf: 'flex-start',

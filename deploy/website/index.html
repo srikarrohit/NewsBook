@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NewsBook — Regional Newspapers, All in One Place</title>
+<style>
+  :root {
+    --bg: #f3f7ff;
+    --surface: #ffffff;
+    --ink: #0f172a;
+    --ink-soft: #475569;
+    --muted: #64748b;
+    --accent: #2a5be0;
+    --accent-soft: #e8edff;
+    --rule: #e1e6ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1120;
+      --surface: #131c2e;
+      --ink: #f1f5f9;
+      --ink-soft: #cbd5f1;
+      --muted: #94a3b8;
+      --accent: #6d8dff;
+      --accent-soft: #17204a;
+      --rule: #263048;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65;
+  }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  header {
+    background: radial-gradient(120% 120% at 20% 15%, #2a5be0 0%, #132352 50%, #0b0f1f 100%);
+    color: #fff;
+    padding: 3rem 1.5rem 3.5rem;
+  }
+  .header-inner { max-width: 860px; margin: 0 auto; }
+  .kicker {
+    font-size: 0.78rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #93a7c9;
+    margin-bottom: 0.8rem;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 2.9rem);
+    margin: 0 0 0.75rem;
+    font-weight: 900;
+  }
+  .tagline { color: #b7c3dd; font-size: 1.1rem; max-width: 46ch; }
+
+  nav.top {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.2rem 1.5rem 0;
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+  }
+  nav.top a { color: #cfd9f5; text-decoration: none; }
+  nav.top a:hover { color: #fff; }
+
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 4rem;
+  }
+
+  section { margin-top: 3rem; }
+  section:first-of-type { margin-top: 0; }
+
+  h2 {
+    font-size: 1.5rem;
+    margin: 0 0 1rem;
+  }
+  p { color: var(--ink-soft); margin: 0 0 1rem; }
+  strong { color: var(--ink); }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1.2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 1.2rem 1.3rem;
+  }
+  .card h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+  .card p { margin: 0; font-size: 0.92rem; }
+
+  #contact {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 16px;
+    padding: 2rem 1.8rem;
+  }
+  .contact-list {
+    list-style: none;
+    margin: 1.2rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .contact-list li { display: flex; gap: 0.9rem; align-items: flex-start; }
+  .icon {
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+  .label {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.15rem;
+  }
+  .value { color: var(--ink); font-weight: 500; }
+  .value a { color: var(--ink); text-decoration: none; }
+  .value a:hover { color: var(--accent); }
+
+  footer {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <nav class="top">
+    <a href="/">Home</a>
+    <a href="#contact">Contact Us</a>
+    <a href="/privacy">Privacy Policy</a>
+  </nav>
+  <div class="header-inner">
+    <div class="kicker">NewsBook</div>
+    <h1>Regional newspapers, all in one place</h1>
+    <p class="tagline">
+      NewsBook is a mobile app for discovering and reading newspapers curated for your
+      state and district — pick a location, and read what matters locally.
+    </p>
+  </div>
+</header>
+
+<main>
+  <section id="about">
+    <h2>About NewsBook</h2>
+    <p>
+      NewsBook helps readers find newspapers and news posts relevant to their own district,
+      published directly by local newspaper administrators. No clutter, no irrelevant
+      national noise by default — just the newspapers curated for where you live.
+    </p>
+    <div class="card-grid">
+      <div class="card">
+        <h3>Pick your area</h3>
+        <p>Select your state and district once, and NewsBook shows newspapers curated for that area.</p>
+      </div>
+      <div class="card">
+        <h3>Read local news</h3>
+        <p>Browse posts published by the newspaper administrators for your selected region.</p>
+      </div>
+      <div class="card">
+        <h3>Built for newspapers</h3>
+        <p>Local newspaper teams get their own admin tools to publish posts and ads for their readers.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact">
+    <h2>Contact Us</h2>
+    <p>Questions about the app, a newspaper listing, or anything else? Reach out directly:</p>
+    <ul class="contact-list">
+      <li>
+        <span class="icon" aria-hidden="true">&#128100;</span>
+        <div>
+          <div class="label">Name</div>
+          <div class="value">Srikar Pothumahanti</div>
+        </div>
+      </li>
+      <li>
+        <span class="icon" aria-hidden="true">&#9742;</span>
+        <div>
+          <div class="label">Phone</div>
+          <div class="value"><a href="tel:+917842151195">+91 78421 51195</a></div>
+        </div>
+      </li>
+      <li>
+        <span class="icon" aria-hidden="true">&#9993;</span>
+        <div>
+          <div class="label">Email</div>
+          <div class="value"><a href="mailto:srikarrohit@gmail.com">srikarrohit@gmail.com</a></div>
+        </div>
+      </li>
+      <li>
+        <span class="icon" aria-hidden="true">&#128205;</span>
+        <div>
+          <div class="label">Address</div>
+          <div class="value">S-4, SVS Residency, Angati Dibba, Maharanipeta, Visakhapatnam, 530002</div>
+        </div>
+      </li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <span>&copy; 2026 NewsBook</span>
+  <a href="/privacy">Privacy Policy</a>
+</footer>
+
+</body>
+</html>

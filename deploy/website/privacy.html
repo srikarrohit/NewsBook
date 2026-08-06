@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Privacy Policy — NewsBook</title>
+<style>
+  :root {
+    --bg: #f3f7ff;
+    --surface: #ffffff;
+    --ink: #0f172a;
+    --ink-soft: #475569;
+    --muted: #64748b;
+    --accent: #0f6d68;
+    --accent-soft: #e6f4f2;
+    --rule: #e1e6ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1120;
+      --surface: #131c2e;
+      --ink: #f1f5f9;
+      --ink-soft: #cbd5f1;
+      --muted: #94a3b8;
+      --accent: #3fbfb0;
+      --accent-soft: #123330;
+      --rule: #263048;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65;
+  }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  header {
+    background: var(--ink);
+    color: #fff;
+    padding: 2.5rem 1.5rem 2rem;
+  }
+  .header-inner { max-width: 760px; margin: 0 auto; }
+  .kicker {
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #93a7c9;
+    margin-bottom: 0.6rem;
+  }
+  h1 {
+    font-size: clamp(1.7rem, 4vw, 2.3rem);
+    margin: 0 0 0.6rem;
+  }
+  .meta { color: #b7c3dd; font-size: 0.9rem; }
+
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+  .lede { font-size: 1.05rem; color: var(--ink-soft); margin-bottom: 2rem; }
+
+  section { margin-top: 2.2rem; padding-top: 2.2rem; border-top: 1px solid var(--rule); }
+  section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+
+  h2 {
+    font-size: 1.25rem;
+    margin: 0 0 0.9rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  h2 .num { color: var(--accent); font-size: 0.9rem; font-weight: 600; }
+  h3 { font-size: 0.98rem; margin: 1.2rem 0 0.4rem; }
+
+  p { color: var(--ink-soft); margin: 0 0 1rem; }
+  strong { color: var(--ink); }
+  ul { color: var(--ink-soft); padding-left: 1.2rem; margin: 0 0 1rem; }
+  li { margin-bottom: 0.4rem; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 1.1rem 0;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+  }
+  .card h3 { margin-top: 0; }
+  .card p:last-child { margin-bottom: 0; }
+  .tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+  }
+  .not-collected { text-decoration: line-through; text-decoration-color: var(--rule); color: var(--muted); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 1.1rem 0; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule); }
+  th { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+  footer {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="kicker">NewsBook &middot; Legal</div>
+    <h1>Privacy Policy</h1>
+    <div class="meta">Effective July 30, 2026 &middot; com.newsbooktech.app</div>
+  </div>
+</header>
+
+<main>
+  <p class="lede">
+    NewsBook is a regional newspaper discovery app: you pick a state and district, and read newspaper
+    tiles curated for that area. This page explains, plainly, what the app does and doesn't collect, why,
+    and what control you have over it.
+  </p>
+
+  <section>
+    <h2><span class="num">01</span>Overview</h2>
+    <p>
+      This policy covers the NewsBook Android/iOS app. Most people use NewsBook without ever creating an
+      account &mdash; you choose a location and read. A smaller set of people are newspaper administrators
+      who log in to publish posts and ads for their tile. Both use cases are described below.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">02</span>Information we collect</h2>
+    <div class="card-grid">
+      <div class="card">
+        <span class="tag">Everyone</span>
+        <h3>Location preference</h3>
+        <p>
+          The state and district you select on first launch, so we can show newspapers relevant to your
+          area. This is a manual choice from a list &mdash; NewsBook does not request GPS or device location
+          permissions. It's saved on your device and sent to our server with each request, only to filter
+          content.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag">Admin accounts only</span>
+        <h3>Login credentials</h3>
+        <p>
+          If you log in as a newspaper/tile administrator, your username and password are sent to our
+          server over HTTPS to authenticate you. Your session is then cached on your device so you don't
+          have to log in every time.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag">Admin accounts only</span>
+        <h3>Posts, ads &amp; photos you publish</h3>
+        <p>
+          If you compose a news post or ad, the text and any photo you choose from your library are
+          uploaded to our server and published to your tile, where readers in that district can see them.
+        </p>
+      </div>
+      <div class="card">
+        <span class="tag">Automatic</span>
+        <h3>Basic server logs</h3>
+        <p>
+          Like almost any app that talks to a server, each request to our backend is logged with an IP
+          address and timestamp for operating and securing the service &mdash; not for tracking you across
+          sessions or apps.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03</span>What we don't collect</h2>
+    <p>NewsBook does not include any third-party analytics, advertising, or tracking SDKs. Specifically, we do not:</p>
+    <ul>
+      <li class="not-collected">Access your device's GPS or precise location</li>
+      <li class="not-collected">Read your contacts, calendar, or call history</li>
+      <li class="not-collected">Run background analytics or crash-tracking SDKs from third parties</li>
+      <li class="not-collected">Show third-party ads or share data with ad networks</li>
+      <li class="not-collected">Sell your data to anyone, for any reason</li>
+    </ul>
+    <p>
+      Ads that appear inside NewsBook are first-party content &mdash; written and published by tile
+      administrators through the same posting tools used for news, on our own servers. They are not served
+      by an ad network, and no ad-tech tracking is attached to them.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">04</span>How we use it</h2>
+    <ul>
+      <li>Show newspaper tiles and posts relevant to your selected state and district.</li>
+      <li>Authenticate administrator accounts and determine what they're allowed to manage.</li>
+      <li>Store and display the posts, ads, and photos administrators publish.</li>
+      <li>Keep the service running reliably and diagnose problems from server logs.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="num">05</span>Storage &amp; transmission</h2>
+    <p>
+      Your location preference and, if applicable, your logged-in session are stored locally on your
+      device. Account credentials, posts, ads, and photos are sent to our backend over HTTPS and stored on
+      our servers so they can be served back to readers in your district.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">06</span>Sharing</h2>
+    <p>We don't sell or rent your information. We share it only where necessary to run the app:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Who</th><th>What they see</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Our hosting provider</td><td>Whatever is stored on the server (posts, ads, photos, account records)</td><td>The server has to live somewhere</td></tr>
+          <tr><td>Other NewsBook readers in your district</td><td>Posts and ads published for that tile</td><td>That's the point of the app</td></tr>
+          <tr><td>Law enforcement</td><td>Only what's legally compelled by valid process</td><td>Legal obligation</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">07</span>Retention</h2>
+    <p>
+      Location preference and session data stay on your device until you clear them or uninstall the app.
+      Account, post, and ad data on our servers is kept for as long as the account or tile is active, and
+      deleted on request (see Contact below).
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">08</span>Your choices</h2>
+    <ul>
+      <li><strong>Change your location</strong> anytime from within the app &mdash; nothing is permanent.</li>
+      <li><strong>Log out</strong> to clear your cached session from the device.</li>
+      <li><strong>Request account or content deletion</strong> by emailing us (below); we'll remove your admin account and associated posts/ads from our servers.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="num">09</span>Children's privacy</h2>
+    <p>
+      NewsBook is intended for general audiences and is not directed at children under 13. We don't
+      knowingly collect personal information from children. If you believe a child has provided us
+      information, contact us and we'll remove it.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">10</span>Security</h2>
+    <p>
+      All traffic between the app and our server travels over HTTPS. Administrator passwords are only ever
+      transmitted to authenticate a session; access to server infrastructure is restricted to those
+      operating the service. No method of transmission or storage is 100% secure, but we take reasonable
+      measures to protect your information.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">11</span>Changes to this policy</h2>
+    <p>
+      If this policy changes, we'll update the effective date at the top of this page. Continued use of
+      NewsBook after a change means you accept the updated policy.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">12</span>Contact</h2>
+    <p>
+      Questions, or want to request deletion of your data? Reach us at
+      <a href="mailto:srikarrohit@gmail.com">srikarrohit@gmail.com</a>.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <span>&copy; 2026 NewsBook</span>
+  <a href="#top">Back to top</a>
+</footer>
+
+</body>
+</html>

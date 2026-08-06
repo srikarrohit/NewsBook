@@ -1,6 +1,6 @@
 #FileLock
-#Thu Jul 23 10:32:01 IST 2026
-hostName=192.168.1.7
-id=19f8d5a163b3ae1cfd9fc5d0d5a65feaa0d72efa2ff
+#Thu Aug 06 19:54:49 IST 2026
+hostName=LAPTOP-DCL9AIVG
+id=19fd7765e1159c2ceb40df2d0478071abdd014b7bb8
 method=file
-server=192.168.1.7\:56669
+server=192.168.1.7\:50294
