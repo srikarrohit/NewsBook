@@ -15,11 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 8
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '8'
+          java-version: '21'
           cache: maven
           cache-dependency-path: backend/pom.xml
 
@@ -101,6 +101,32 @@ jobs:
             JAR=$(ls -t /home/ec2-user/deploy-tmp/*.jar | head -n1)
             cp "$JAR" /home/ec2-user/newsbook-backend/app.jar
             rm -f /home/ec2-user/deploy-tmp/*.jar
+
+            # One-time migration: Spring Boot 4's bundled H2 (2.4.240) uses a newer
+            # MVStore file format than the H2 (2.1.214) this app previously shipped with,
+            # so the existing data/newsbook.mv.db can't be opened as-is. Export it with the
+            # old driver and reimport with the new one before the app (re)starts.
+            DB_DIR="/home/ec2-user/newsbook-backend/data"
+            MARKER="$DB_DIR/.h2-migrated-2.4.240"
+            OLD_DB="$DB_DIR/newsbook.mv.db"
+            if [ -f "$OLD_DB" ] && [ ! -f "$MARKER" ]; then
+              echo "Migrating H2 data file to the Spring Boot 4 format..."
+              pm2 stop newsbook-backend || true
+              cd /home/ec2-user/newsbook-backend
+              [ -f h2-2.1.214.jar ] || curl -sL -o h2-2.1.214.jar https://repo1.maven.org/maven2/com/h2database/h2/2.1.214/h2-2.1.214.jar
+              [ -f h2-2.4.240.jar ] || curl -sL -o h2-2.4.240.jar https://repo1.maven.org/maven2/com/h2database/h2/2.4.240/h2-2.4.240.jar
+              java -cp h2-2.1.214.jar org.h2.tools.Script \
+                -url "jdbc:h2:file:$DB_DIR/newsbook;IFEXISTS=TRUE" -user sa -password "" \
+                -script "$DB_DIR/migration-backup.sql"
+              mv "$OLD_DB" "$DB_DIR/newsbook.mv.db.pre-boot4.bak"
+              rm -f "$DB_DIR/newsbook.trace.db" "$DB_DIR/newsbook.lock.db"
+              java -cp h2-2.4.240.jar org.h2.tools.RunScript \
+                -url "jdbc:h2:file:$DB_DIR/newsbook" -user sa -password "" \
+                -script "$DB_DIR/migration-backup.sql"
+              touch "$MARKER"
+              echo "H2 migration complete (old file kept as newsbook.mv.db.pre-boot4.bak)."
+            fi
+
             pm2 startOrRestart /home/ec2-user/newsbook-backend/ecosystem.config.js
             pm2 save
             sleep 2

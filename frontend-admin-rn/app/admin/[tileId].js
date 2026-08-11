@@ -22,7 +22,7 @@ const displayTag = (tag) => (tag && !LEGACY_TAGS.includes(tag) ? tag : 'General'
 
 export default function AdminTilePage() {
   const { user, logout, isLoading } = useAuth();
-  const { getTileById, getPostsByTile, getArchivedPostsByTile, hasFetchedOnce, fetchTiles } = useTiles();
+  const { getTileById, getPostsByTile, hasFetchedOnce, fetchTiles } = useTiles();
   const { getAdsByTile, getArchivedAdsByTile } = useAds();
   const { tileId } = useLocalSearchParams();
   const router = useRouter();
@@ -30,7 +30,6 @@ export default function AdminTilePage() {
   const [tile, setTile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [ads, setAds] = useState([]);
-  const [archivedPosts, setArchivedPosts] = useState([]);
   const [archivedAds, setArchivedAds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [retriedTileFetch, setRetriedTileFetch] = useState(false);
@@ -85,15 +84,13 @@ export default function AdminTilePage() {
     if (!tileId) return;
     setLoading(true);
     try {
-      const [postData, adData, archivedPostData, archivedAdData] = await Promise.all([
+      const [postData, adData, archivedAdData] = await Promise.all([
         getPostsByTile(tileId),
         getAdsByTile(tileId),
-        getArchivedPostsByTile(tileId),
         getArchivedAdsByTile(tileId),
       ]);
       setPosts(postData || []);
       setAds(adData || []);
-      setArchivedPosts(archivedPostData || []);
       setArchivedAds(archivedAdData || []);
     } catch (error) {
       Alert.alert('Unable to load admin data', error.message || 'Please try again.');
@@ -164,6 +161,9 @@ export default function AdminTilePage() {
           posts.map((item) => (
             <View key={item.id} style={styles.card}>
               <Text style={styles.cardTitle}>{displayTag(item.tag)}</Text>
+              {item.publishAt && new Date(item.publishAt) > new Date() && (
+                <Text style={styles.emptyText}>Scheduled for {item.publishAt}</Text>
+              )}
               <Text style={styles.cardContent}>{item.content}</Text>
               <TouchableOpacity
                 style={styles.editButton}
@@ -228,20 +228,6 @@ export default function AdminTilePage() {
               </View>
             ))}
           </>
-        )}
-      </View>
-
-      <View style={styles.segment}>
-        <Text style={styles.sectionTitle}>Archived News</Text>
-        {archivedPosts.length === 0 ? (
-          <Text style={styles.emptyText}>No archived posts yet.</Text>
-        ) : (
-          archivedPosts.map((item) => (
-            <View key={item.id} style={styles.card}>
-              <Text style={styles.cardTitle}>{displayTag(item.tag)}</Text>
-              <Text style={styles.cardContent}>{item.content}</Text>
-            </View>
-          ))
         )}
       </View>
 

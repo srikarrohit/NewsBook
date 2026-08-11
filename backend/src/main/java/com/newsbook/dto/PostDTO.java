@@ -9,10 +9,11 @@ public class PostDTO {
     private String tag;
     private String createdAt;
     private boolean archived;
+    private String publishAt;
 
     public PostDTO() {}
 
-    public PostDTO(Long id, String tileId, Long adminId, String content, String image, String tag, String createdAt, boolean archived) {
+    public PostDTO(Long id, String tileId, Long adminId, String content, String image, String tag, String createdAt, boolean archived, String publishAt) {
         this.id = id;
         this.tileId = tileId;
         this.adminId = adminId;
@@ -21,6 +22,7 @@ public class PostDTO {
         this.tag = tag;
         this.createdAt = createdAt;
         this.archived = archived;
+        this.publishAt = publishAt;
     }
 
     public Long getId() {
@@ -70,5 +72,11 @@ public class PostDTO {
     }
     public void setArchived(boolean archived) {
         this.archived = archived;
+    }
+    public String getPublishAt() {
+        return publishAt;
+    }
+    public void setPublishAt(String publishAt) {
+        this.publishAt = publishAt;
     }
 }

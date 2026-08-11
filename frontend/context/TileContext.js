@@ -55,11 +55,11 @@ export function TileProvider({ children }) {
     }
   };
 
-  // Posts
+  // Posts (published only - excludes posts scheduled for a future date)
   const getPostsByTile = async (tileId) => {
     setLoading(true);
     try {
-      return await apiGet(`/posts/tile/${tileId}`);
+      return await apiGet(`/posts/tile/${tileId}/published`);
     } finally {
       setLoading(false);
     }

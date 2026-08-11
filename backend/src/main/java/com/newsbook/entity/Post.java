@@ -1,6 +1,6 @@
 package com.newsbook.entity;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -39,6 +39,13 @@ public class Post {
 
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean archived = false;
+
+    // When this post should become visible to readers. Defaults to "now" (immediate
+    // publish) unless an admin schedules it for a future date. Needs a DB-level default
+    // (not just the Java-side one) so ddl-auto=update can add this NOT NULL column to the
+    // existing posts table - existing rows backfill to "already published", which is correct.
+    @Column(nullable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    private LocalDateTime publishAt = LocalDateTime.now();
         // Explicit getters and setters for all fields
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
@@ -58,4 +65,6 @@ public class Post {
         public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
         public boolean isArchived() { return archived; }
         public void setArchived(boolean archived) { this.archived = archived; }
+        public LocalDateTime getPublishAt() { return publishAt; }
+        public void setPublishAt(LocalDateTime publishAt) { this.publishAt = publishAt; }
     }

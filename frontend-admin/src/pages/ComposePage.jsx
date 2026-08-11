@@ -10,7 +10,9 @@ import { normalizeRole } from '../constants/roleUtils';
 import ImageCropModal from '../components/ImageCropModal';
 
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
-const MAX_WORDS = 80;
+// Keep in sync with the reader app's card text area, which only fits ~50 words
+// in the bottom half of the screen before requiring an in-card scroll.
+const MAX_WORDS = 50;
 const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 const formatImageUrl = (image) => {
   if (!image) return null;
@@ -32,6 +34,7 @@ export default function ComposePage() {
 
   const [selectedMode, setSelectedMode] = useState(editType === 'ad' ? 'ad' : 'post');
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0]);
+  const [publishDate, setPublishDate] = useState('');
   const [content, setContent] = useState('');
   const [adContent, setAdContent] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -62,6 +65,7 @@ export default function ComposePage() {
         } else {
           setContent(data.content || '');
           setSelectedTag(TAG_OPTIONS.includes(data.tag) ? data.tag : TAG_OPTIONS[0]);
+          setPublishDate(data.publishAt ? data.publishAt.slice(0, 10) : '');
         }
         setExistingImageUrl(data.image || null);
       } catch (error) {
@@ -132,14 +136,16 @@ export default function ComposePage() {
         imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
       }
 
+      const publishAt = publishDate ? `${publishDate}T00:00:00` : undefined;
+
       if (isEditing) {
         if (editType === 'ad') {
           await apiPut(`/ads/${editId}`, { adminId: user.id, content: adContent, image: imageUrl });
         } else {
-          await apiPut(`/posts/${editId}`, { adminId: user.id, content, image: imageUrl, tag: selectedTag });
+          await apiPut(`/posts/${editId}`, { adminId: user.id, content, image: imageUrl, tag: selectedTag, publishAt });
         }
       } else if (selectedMode === 'post') {
-        await addPost(tileId, user.id, { content, image: imageUrl, tag: selectedTag });
+        await addPost(tileId, user.id, { content, image: imageUrl, tag: selectedTag, publishAt });
       } else {
         await addAd(tileId, user.id, { content: adContent, image: imageUrl, tag: 'admin ad' });
       }
@@ -194,6 +200,20 @@ export default function ComposePage() {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {selectedMode === 'post' && (
+          <div className="segment">
+            <h2 className="section-title">To Be Published On</h2>
+            <p className="helper-text">Leave blank to publish immediately.</p>
+            <input
+              type="date"
+              className="input"
+              value={publishDate}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setPublishDate(e.target.value)}
+            />
           </div>
         )}
 

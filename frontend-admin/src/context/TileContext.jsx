@@ -69,15 +69,6 @@ export function TileProvider({ children }) {
     }
   };
 
-  const getArchivedPostsByTile = async (tileId) => {
-    setLoading(true);
-    try {
-      return await apiGet(`/posts/tile/${tileId}/archived`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const addPost = async (tileId, adminId, post) => {
     setLoading(true);
     try {
@@ -88,7 +79,7 @@ export function TileProvider({ children }) {
   };
 
   return (
-    <TileContext.Provider value={{ tiles, loading, hasFetchedOnce, fetchTiles, getTileById, createTile, updateTile, deleteTile, getPostsByTile, getArchivedPostsByTile, addPost }}>
+    <TileContext.Provider value={{ tiles, loading, hasFetchedOnce, fetchTiles, getTileById, createTile, updateTile, deleteTile, getPostsByTile, addPost }}>
       {children}
     </TileContext.Provider>
   );

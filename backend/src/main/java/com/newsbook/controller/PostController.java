@@ -33,6 +33,7 @@ public class PostController {
         String content = request.get("content") instanceof String ? (String) request.get("content") : null;
         String image = request.get("image") instanceof String ? (String) request.get("image") : null;
         String tag = request.get("tag") instanceof String ? (String) request.get("tag") : null;
+        String publishAt = request.get("publishAt") instanceof String ? (String) request.get("publishAt") : null;
 
         if (tileId == null || adminIdObj == null || content == null) {
             return ResponseEntity.badRequest().body("tileId, adminId and content are required");
@@ -66,7 +67,7 @@ public class PostController {
             return ResponseEntity.status(403).body("Admin cannot create posts for this tile");
         }
 
-        PostDTO post = postService.createPost(tileId, adminId, content, image, tag);
+        PostDTO post = postService.createPost(tileId, adminId, content, image, tag, publishAt);
         return ResponseEntity.ok(post);
     }
 
@@ -76,9 +77,10 @@ public class PostController {
         return ResponseEntity.ok(posts);
     }
 
-    @GetMapping("/tile/{tileId}/archived")
-    public ResponseEntity<?> getArchivedPostsByTile(@PathVariable String tileId) {
-        List<PostDTO> posts = postService.getArchivedPostsByTile(tileId);
+    // Reader-facing feed: excludes posts scheduled for a future publish date.
+    @GetMapping("/tile/{tileId}/published")
+    public ResponseEntity<?> getPublishedPostsByTile(@PathVariable String tileId) {
+        List<PostDTO> posts = postService.getPublishedPostsByTile(tileId);
         return ResponseEntity.ok(posts);
     }
 
@@ -121,7 +123,8 @@ public class PostController {
         String content = request.get("content") instanceof String ? (String) request.get("content") : null;
         String image = request.get("image") instanceof String ? (String) request.get("image") : null;
         String tag = request.get("tag") instanceof String ? (String) request.get("tag") : null;
-        PostDTO updated = postService.updatePost(id, content, image, tag);
+        String publishAt = request.get("publishAt") instanceof String ? (String) request.get("publishAt") : null;
+        PostDTO updated = postService.updatePost(id, content, image, tag, publishAt);
         return ResponseEntity.ok(updated);
     }
 

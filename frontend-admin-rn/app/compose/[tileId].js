@@ -13,7 +13,9 @@ import { normalizeRole } from '../../constants/roleUtils';
 import { IMAGE_ASPECT, IMAGE_ASPECT_RATIO } from '../../constants/imageAspect';
 
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
-const MAX_WORDS = 80;
+// Keep in sync with the reader app's card text area, which only fits ~50 words
+// in the bottom half of the screen before requiring an in-card scroll.
+const MAX_WORDS = 50;
 const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 const formatImageUrl = (image) => {
   if (!image) return null;
@@ -33,6 +35,7 @@ export default function ComposePage() {
 
   const [selectedMode, setSelectedMode] = useState(editType === 'ad' ? 'ad' : 'post');
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0]);
+  const [publishDate, setPublishDate] = useState('');
   const [content, setContent] = useState('');
   const [adContent, setAdContent] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -58,6 +61,7 @@ export default function ComposePage() {
         } else {
           setContent(data.content || '');
           setSelectedTag(TAG_OPTIONS.includes(data.tag) ? data.tag : TAG_OPTIONS[0]);
+          setPublishDate(data.publishAt ? data.publishAt.slice(0, 10) : '');
         }
         setExistingImageUrl(data.image || null);
       } catch (error) {
@@ -98,6 +102,9 @@ export default function ComposePage() {
     if (!selectedImage && !(isEditing && existingImageUrl)) {
       return Alert.alert('Please select an image');
     }
+    if (selectedMode === 'post' && publishDate && !/^\d{4}-\d{2}-\d{2}$/.test(publishDate)) {
+      return Alert.alert('Invalid date', 'Enter the publish date as YYYY-MM-DD, or leave it blank.');
+    }
     setLoading(true);
     try {
       let imageUrl = existingImageUrl;
@@ -106,15 +113,17 @@ export default function ComposePage() {
         imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
       }
 
+      const publishAt = publishDate ? `${publishDate}T00:00:00` : undefined;
+
       if (isEditing) {
         if (editType === 'ad') {
           await apiPut(`/ads/${editId}`, { adminId: user.id, content: adContent, image: imageUrl });
         } else {
-          await apiPut(`/posts/${editId}`, { adminId: user.id, content, image: imageUrl, tag: selectedTag });
+          await apiPut(`/posts/${editId}`, { adminId: user.id, content, image: imageUrl, tag: selectedTag, publishAt });
         }
         Alert.alert('Success', `${editType === 'ad' ? 'Ad' : 'Post'} updated successfully`);
       } else if (selectedMode === 'post') {
-        await addPost(tileId, user.id, { content, image: imageUrl, tag: selectedTag });
+        await addPost(tileId, user.id, { content, image: imageUrl, tag: selectedTag, publishAt });
         Alert.alert('Success', 'Post published successfully');
       } else {
         await addAd(tileId, user.id, { content: adContent, image: imageUrl, tag: 'admin ad' });
@@ -171,6 +180,20 @@ export default function ComposePage() {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+        )}
+
+        {selectedMode === 'post' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>To Be Published On</Text>
+            <Text style={styles.hintText}>Leave blank to publish immediately.</Text>
+            <TextInput
+              placeholder="YYYY-MM-DD"
+              value={publishDate}
+              onChangeText={setPublishDate}
+              style={[styles.input, { minHeight: 0, marginTop: 12 }]}
+              keyboardType="numbers-and-punctuation"
+            />
           </View>
         )}
 

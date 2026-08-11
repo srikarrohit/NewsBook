@@ -16,11 +16,13 @@ public class ArchiveScheduler {
     @Autowired
     private AdService adService;
 
-    // Runs every day at midnight (server time) and archives everything posted that day
+    // Runs every day at midnight (server time): posts are permanently deleted (along with
+    // their S3 image/text), while ads are only soft-archived so their performance stats
+    // remain visible in the Archived Ads view.
     @Scheduled(cron = "0 0 0 * * *")
     public void archiveDailyContent() {
-        logger.info("Midnight archive job: archiving all active posts and ads");
-        postService.archiveAllActivePosts();
+        logger.info("Midnight job: purging all posts and archiving all active ads");
+        postService.purgeAllPosts();
         adService.archiveAllActiveAds();
     }
 }

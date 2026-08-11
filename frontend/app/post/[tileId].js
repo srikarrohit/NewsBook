@@ -14,7 +14,9 @@ import { IMAGE_ASPECT } from '../../constants/imageAspect';
 
 const BACKEND_URL = API_BASE_URL; // central API base URL
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
-const MAX_WORDS = 80;
+// Card text area is the bottom 50% of the screen; ~80 words overflowed the
+// visible area on most phones before the reader had to scroll within the card.
+const MAX_WORDS = 50;
 const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 const formatImageUrl = (image) => {
   if (!image) return null;

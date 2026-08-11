@@ -10,7 +10,7 @@ const displayTag = (tag) => (tag && !LEGACY_TAGS.includes(tag) ? tag : 'General'
 
 export default function AdminTilePage() {
   const { user, logout, isLoading } = useAuth();
-  const { getTileById, getPostsByTile, getArchivedPostsByTile, hasFetchedOnce, fetchTiles } = useTiles();
+  const { getTileById, getPostsByTile, hasFetchedOnce, fetchTiles } = useTiles();
   const { getAdsByTile, getArchivedAdsByTile } = useAds();
   const { tileId } = useParams();
   const navigate = useNavigate();
@@ -19,7 +19,6 @@ export default function AdminTilePage() {
   const [tile, setTile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [ads, setAds] = useState([]);
-  const [archivedPosts, setArchivedPosts] = useState([]);
   const [archivedAds, setArchivedAds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -74,15 +73,13 @@ export default function AdminTilePage() {
     if (!tileId) return;
     setLoading(true);
     try {
-      const [postData, adData, archivedPostData, archivedAdData] = await Promise.all([
+      const [postData, adData, archivedAdData] = await Promise.all([
         getPostsByTile(tileId),
         getAdsByTile(tileId),
-        getArchivedPostsByTile(tileId),
         getArchivedAdsByTile(tileId),
       ]);
       setPosts(postData || []);
       setAds(adData || []);
-      setArchivedPosts(archivedPostData || []);
       setArchivedAds(archivedAdData || []);
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Unable to load admin data.' });
@@ -152,6 +149,9 @@ export default function AdminTilePage() {
           posts.map((item) => (
             <div key={item.id} className="card">
               <div className="card-title">{displayTag(item.tag)}</div>
+              {item.publishAt && new Date(item.publishAt) > new Date() && (
+                <div className="helper-text">Scheduled for {item.publishAt}</div>
+              )}
               <div className="card-content">{item.content}</div>
               <button
                 className="upload-button"
@@ -218,20 +218,6 @@ export default function AdminTilePage() {
               </div>
             ))}
           </>
-        )}
-      </div>
-
-      <div className="segment">
-        <h2 className="section-title">Archived News</h2>
-        {archivedPosts.length === 0 ? (
-          <p className="empty-text">No archived posts yet.</p>
-        ) : (
-          archivedPosts.map((item) => (
-            <div key={item.id} className="card">
-              <div className="card-title">{displayTag(item.tag)}</div>
-              <div className="card-content">{item.content}</div>
-            </div>
-          ))
         )}
       </div>
 
