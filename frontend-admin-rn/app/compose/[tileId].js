@@ -6,16 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useAds } from '../../context/AdsContext';
 import { useTiles } from '../../context/TileContext';
-import { apiGet, apiPut } from '../../constants/apiUtil';
+import { apiGet, apiPost, apiPut } from '../../constants/apiUtil';
 import { API_BASE_URL } from '../../constants/api';
 import { apiUploadImage } from '../../constants/apiUploadImage';
 import { normalizeRole } from '../../constants/roleUtils';
 import { IMAGE_ASPECT, IMAGE_ASPECT_RATIO } from '../../constants/imageAspect';
 
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
-// Keep in sync with the reader app's card text area, which only fits ~50 words
-// in the bottom half of the screen before requiring an in-card scroll.
-const MAX_WORDS = 50;
+// Keep in sync with the reader app's card text area (frontend/app/post/[tileId].js).
+const MAX_WORDS = 70;
 const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 const formatImageUrl = (image) => {
   if (!image) return null;
@@ -35,12 +34,13 @@ export default function ComposePage() {
 
   const [selectedMode, setSelectedMode] = useState(editType === 'ad' ? 'ad' : 'post');
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0]);
-  const [publishDate, setPublishDate] = useState('');
+  const [publishDate, setPublishDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [content, setContent] = useState('');
   const [adContent, setAdContent] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [existingImageUrl, setExistingImageUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   useEffect(() => {
     if (!isLoading) {
@@ -61,7 +61,7 @@ export default function ComposePage() {
         } else {
           setContent(data.content || '');
           setSelectedTag(TAG_OPTIONS.includes(data.tag) ? data.tag : TAG_OPTIONS[0]);
-          setPublishDate(data.publishAt ? data.publishAt.slice(0, 10) : '');
+          if (data.publishAt) setPublishDate(data.publishAt.slice(0, 10));
         }
         setExistingImageUrl(data.image || null);
       } catch (error) {
@@ -92,6 +92,21 @@ export default function ComposePage() {
   const wordCount = countWords(activeText);
   const overWordLimit = wordCount > MAX_WORDS;
 
+  const handleSummarize = async () => {
+    if (!activeText.trim()) {
+      return Alert.alert('Write something first, then summarize it.');
+    }
+    setIsSummarizing(true);
+    try {
+      const { summary } = await apiPost('/summarize', { text: activeText });
+      setActiveText(summary);
+    } catch (error) {
+      Alert.alert('Failed to summarize', error.message || 'Try again');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   const handlePublish = async () => {
     if (!activeText.trim()) {
       return Alert.alert('Please enter some content');
@@ -102,8 +117,8 @@ export default function ComposePage() {
     if (!selectedImage && !(isEditing && existingImageUrl)) {
       return Alert.alert('Please select an image');
     }
-    if (selectedMode === 'post' && publishDate && !/^\d{4}-\d{2}-\d{2}$/.test(publishDate)) {
-      return Alert.alert('Invalid date', 'Enter the publish date as YYYY-MM-DD, or leave it blank.');
+    if (selectedMode === 'post' && !/^\d{4}-\d{2}-\d{2}$/.test(publishDate)) {
+      return Alert.alert('Date required', 'Enter the publish date as YYYY-MM-DD.');
     }
     setLoading(true);
     try {
@@ -113,7 +128,7 @@ export default function ComposePage() {
         imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
       }
 
-      const publishAt = publishDate ? `${publishDate}T00:00:00` : undefined;
+      const publishAt = `${publishDate}T00:00:00`;
 
       if (isEditing) {
         if (editType === 'ad') {
@@ -185,8 +200,8 @@ export default function ComposePage() {
 
         {selectedMode === 'post' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>To Be Published On</Text>
-            <Text style={styles.hintText}>Leave blank to publish immediately.</Text>
+            <Text style={styles.sectionTitle}>To Be Published On *</Text>
+            <Text style={styles.hintText}>Defaults to today - required.</Text>
             <TextInput
               placeholder="YYYY-MM-DD"
               value={publishDate}
@@ -210,6 +225,13 @@ export default function ComposePage() {
             multiline
           />
           <Text style={overWordLimit ? styles.wordCountError : styles.wordCountText}>{wordCount} / {MAX_WORDS} words</Text>
+          <TouchableOpacity
+            style={styles.uploadButton}
+            onPress={handleSummarize}
+            disabled={isSummarizing || !activeText.trim()}
+          >
+            <Text style={styles.uploadButtonText}>{isSummarizing ? 'Summarizing…' : 'Summarize with AI'}</Text>
+          </TouchableOpacity>
           <View style={styles.hintBox}>
             <Text style={styles.hintText}>🎙️ Tip: tap the microphone icon on your keyboard to dictate this text.</Text>
           </View>

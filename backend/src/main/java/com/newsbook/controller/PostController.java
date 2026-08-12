@@ -38,6 +38,9 @@ public class PostController {
         if (tileId == null || adminIdObj == null || content == null) {
             return ResponseEntity.badRequest().body("tileId, adminId and content are required");
         }
+        if (publishAt == null || publishAt.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("publishAt is required");
+        }
 
         Long adminId;
         try {

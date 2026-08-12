@@ -3,16 +3,15 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAds } from '../context/AdsContext';
 import { useTiles } from '../context/TileContext';
-import { apiGet, apiPut } from '../constants/apiUtil';
+import { apiGet, apiPost, apiPut } from '../constants/apiUtil';
 import { apiUploadImage } from '../constants/apiUploadImage';
 import { API_BASE_URL } from '../constants/api';
 import { normalizeRole } from '../constants/roleUtils';
 import ImageCropModal from '../components/ImageCropModal';
 
 const TAG_OPTIONS = ['General', 'Politics', 'Sports', 'Business', 'Entertainment', 'Technology'];
-// Keep in sync with the reader app's card text area, which only fits ~50 words
-// in the bottom half of the screen before requiring an in-card scroll.
-const MAX_WORDS = 50;
+// Keep in sync with the reader app's card text area (frontend/app/post/[tileId].js).
+const MAX_WORDS = 70;
 const countWords = (text) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 const formatImageUrl = (image) => {
   if (!image) return null;
@@ -34,7 +33,7 @@ export default function ComposePage() {
 
   const [selectedMode, setSelectedMode] = useState(editType === 'ad' ? 'ad' : 'post');
   const [selectedTag, setSelectedTag] = useState(TAG_OPTIONS[0]);
-  const [publishDate, setPublishDate] = useState('');
+  const [publishDate, setPublishDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [content, setContent] = useState('');
   const [adContent, setAdContent] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -43,6 +42,7 @@ export default function ComposePage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [isListening, setIsListening] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
   const [cropSource, setCropSource] = useState(null);
   const recognitionRef = useRef(null);
 
@@ -65,7 +65,7 @@ export default function ComposePage() {
         } else {
           setContent(data.content || '');
           setSelectedTag(TAG_OPTIONS.includes(data.tag) ? data.tag : TAG_OPTIONS[0]);
-          setPublishDate(data.publishAt ? data.publishAt.slice(0, 10) : '');
+          if (data.publishAt) setPublishDate(data.publishAt.slice(0, 10));
         }
         setExistingImageUrl(data.image || null);
       } catch (error) {
@@ -118,6 +118,21 @@ export default function ComposePage() {
     setIsListening(true);
   };
 
+  const handleSummarize = async () => {
+    if (!activeText.trim()) {
+      return setMessage({ type: 'error', text: 'Write something first, then summarize it.' });
+    }
+    setIsSummarizing(true);
+    try {
+      const { summary } = await apiPost('/summarize', { text: activeText });
+      setActiveText(summary);
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Failed to summarize.' });
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   const handlePublish = async () => {
     if (!activeText.trim()) {
       return setMessage({ type: 'error', text: 'Please enter some content.' });
@@ -128,6 +143,9 @@ export default function ComposePage() {
     if (!selectedImage && !(isEditing && existingImageUrl)) {
       return setMessage({ type: 'error', text: 'Please select an image.' });
     }
+    if (selectedMode === 'post' && !publishDate) {
+      return setMessage({ type: 'error', text: 'Please choose a date to publish on.' });
+    }
     setLoading(true);
     try {
       let imageUrl = existingImageUrl;
@@ -136,7 +154,7 @@ export default function ComposePage() {
         imageUrl = uploadRes.url || uploadRes.imageUrl || uploadRes.path;
       }
 
-      const publishAt = publishDate ? `${publishDate}T00:00:00` : undefined;
+      const publishAt = `${publishDate}T00:00:00`;
 
       if (isEditing) {
         if (editType === 'ad') {
@@ -205,14 +223,15 @@ export default function ComposePage() {
 
         {selectedMode === 'post' && (
           <div className="segment">
-            <h2 className="section-title">To Be Published On</h2>
-            <p className="helper-text">Leave blank to publish immediately.</p>
+            <h2 className="section-title">To Be Published On *</h2>
+            <p className="helper-text">Defaults to today - required.</p>
             <input
               type="date"
               className="input"
               value={publishDate}
               min={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setPublishDate(e.target.value)}
+              required
             />
           </div>
         )}
@@ -241,6 +260,14 @@ export default function ComposePage() {
           <p className={overWordLimit ? 'error-text' : 'helper-text'}>{wordCount} / {MAX_WORDS} words</p>
           <button className="upload-button" onClick={toggleDictation} style={{ marginTop: 4 }}>
             {isListening ? 'Stop Dictation' : 'Dictate with Microphone'}
+          </button>
+          <button
+            className="upload-button"
+            onClick={handleSummarize}
+            disabled={isSummarizing || !activeText.trim()}
+            style={{ marginTop: 4 }}
+          >
+            {isSummarizing ? 'Summarizing…' : 'Summarize with AI'}
           </button>
           {message && <p className={message.type === 'error' ? 'error-text' : 'success-text'}>{message.text}</p>}
         </div>
