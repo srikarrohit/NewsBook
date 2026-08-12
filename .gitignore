@@ -3,3 +3,4 @@ frontend-admin/node_modules/
 frontend-admin-rn/node_modules/
 *.pem
 *.jks
+backend/target/
