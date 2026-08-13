@@ -15,4 +15,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findByAdminIdAndArchivedFalseOrderByCreatedAtDesc(Long adminId);
     // Reader-facing feed: only posts that are live and whose scheduled publish date has arrived.
     List<Post> findByTileIdAndArchivedFalseAndPublishAtLessThanEqualOrderByCreatedAtDesc(String tileId, LocalDateTime now);
+    // Nightly purge: posts already shown to readers. Future-scheduled posts are left alone.
+    List<Post> findByPublishAtLessThanEqual(LocalDateTime now);
 }

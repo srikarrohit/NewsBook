@@ -7,9 +7,15 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Bucket must grant public read via its bucket policy (not object ACLs -
@@ -60,5 +66,33 @@ public class S3StorageService {
         if (url == null) return null;
         String prefix = String.format("https://%s.s3.%s.amazonaws.com/", bucket, region);
         return url.startsWith(prefix) ? url.substring(prefix.length()) : null;
+    }
+
+    public List<String> listKeys(String prefix) {
+        List<String> keys = new ArrayList<>();
+        String continuationToken = null;
+        do {
+            ListObjectsV2Request.Builder requestBuilder =
+                    ListObjectsV2Request.builder().bucket(bucket).prefix(prefix);
+            if (continuationToken != null) {
+                requestBuilder.continuationToken(continuationToken);
+            }
+            ListObjectsV2Response response = s3Client.listObjectsV2(requestBuilder.build());
+            for (S3Object object : response.contents()) {
+                keys.add(object.key());
+            }
+            continuationToken = response.isTruncated() ? response.nextContinuationToken() : null;
+        } while (continuationToken != null);
+        return keys;
+    }
+
+    /** Deletes every object under a prefix whose key isn't in keepKeys - cleans up uploads that never ended up attached to a saved post/ad. */
+    public void sweepUnreferenced(String prefix, Set<String> keepKeys) {
+        for (String key : listKeys(prefix)) {
+            if (!keepKeys.contains(key)) {
+                logger.info("Sweeping orphaned S3 object: {}", key);
+                deleteObject(key);
+            }
+        }
     }
 }

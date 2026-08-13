@@ -9,8 +9,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,6 +22,9 @@ public class AdService {
 
     @Autowired
     private AdViewRepository adViewRepository;
+
+    @Autowired
+    private S3StorageService s3StorageService;
 
     public AdDTO createAd(Long tileId, Long adminId, String content, String image) {
         Ad ad = new Ad();
@@ -122,6 +127,18 @@ public class AdService {
 
     public void deleteAd(Long id) {
         adRepository.deleteById(id);
+    }
+
+    /** S3 keys still in use by ads (active or archived - archived ads keep their images for the stats view). */
+    public Set<String> getActiveS3Keys() {
+        Set<String> keys = new HashSet<>();
+        for (Ad ad : adRepository.findAll()) {
+            String imageKey = s3StorageService.keyFromUrl(ad.getImage());
+            if (imageKey != null) {
+                keys.add(imageKey);
+            }
+        }
+        return keys;
     }
         // ...existing code...
 

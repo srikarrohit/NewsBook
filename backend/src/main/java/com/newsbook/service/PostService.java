@@ -96,12 +96,29 @@ public class PostService {
         postRepository.deleteById(id);
     }
 
-    /** Runs nightly: every post (and its S3 image/text) is permanently removed. */
+    /**
+     * Runs nightly: every post that has already been shown to readers (publishAt in the
+     * past) is permanently removed, along with its S3 image/text. Posts still scheduled for
+     * a future date are left alone so they survive to actually be published.
+     */
     public void purgeAllPosts() {
-        List<Post> all = postRepository.findAll();
-        logger.info("Midnight purge job: permanently deleting {} post(s)", all.size());
-        all.forEach(this::deleteS3Assets);
-        postRepository.deleteAll(all);
+        List<Post> published = postRepository.findByPublishAtLessThanEqual(LocalDateTime.now());
+        logger.info("Midnight purge job: permanently deleting {} published post(s)", published.size());
+        published.forEach(this::deleteS3Assets);
+        postRepository.deleteAll(published);
+    }
+
+    /** S3 keys still in use by remaining posts (scheduled-but-not-yet-published) - must survive the orphaned-upload sweep. */
+    public java.util.Set<String> getActiveS3Keys() {
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        for (Post post : postRepository.findAll()) {
+            String imageKey = s3StorageService.keyFromUrl(post.getImage());
+            if (imageKey != null) {
+                keys.add(imageKey);
+            }
+            keys.add("content/" + post.getId() + ".txt");
+        }
+        return keys;
     }
 
     private void backupContentToS3(Post post) {
