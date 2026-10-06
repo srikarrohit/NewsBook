@@ -1,0 +1,19 @@
+[Unit]
+Description=Newsbook backend (Rust)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ec2-user
+WorkingDirectory=/home/ec2-user/newsbook-backend
+EnvironmentFile=/etc/newsbook/backend.env
+# Only nginx talks to the backend.
+Environment=BIND_ADDR=127.0.0.1:8080
+ExecStart=/home/ec2-user/newsbook-backend/newsbook-backend
+Restart=always
+RestartSec=5
+MemoryMax=256M
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

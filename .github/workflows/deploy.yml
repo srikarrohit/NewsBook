@@ -8,6 +8,10 @@ on:
       - 'frontend-admin/**'
       - 'deploy/**'
       - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+# Everything is built here on GitHub's runners; the t4g.nano server (512 MB RAM) only
+# receives finished files. EC2_HOST must be the ARM server (Elastic IP 16.112.243.119).
 
 jobs:
   backend:
@@ -15,122 +19,103 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-          cache-dependency-path: backend/pom.xml
+          targets: aarch64-unknown-linux-musl
 
-      - name: Build with Maven
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # zig as the cross-linker: a fully static ARM64 binary, no glibc version coupling.
+      - name: Install cargo-zigbuild
+        run: pip install ziglang cargo-zigbuild
+
+      - name: Build (ARM64, static)
         working-directory: backend
-        run: mvn -B clean package
+        run: cargo zigbuild --release --locked --target aarch64-unknown-linux-musl
 
-      - name: Upload jar to EC2
+      - name: Package
+        run: |
+          mkdir -p bundle/site
+          cp backend/target/aarch64-unknown-linux-musl/release/newsbook-backend bundle/
+          cp deploy/systemd/newsbook-backend.service deploy/nginx/newsbooktech.conf bundle/
+          cp deploy/website/*.html bundle/site/
+          tar czf backend-bundle.tgz -C bundle .
+
+      - name: Upload to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: 'backend/target/*.jar'
-          target: '/home/ec2-user/deploy-tmp'
-          strip_components: 2
+          source: backend-bundle.tgz
+          target: /home/ec2-user/deploy-tmp
 
-      - name: Upload ecosystem file to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: 'backend/ecosystem.config.js'
-          target: '/home/ec2-user/deploy-tmp'
-          strip_components: 1
-
-      - name: Upload nginx config to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: 'deploy/nginx/newsbooktech.conf'
-          target: '/home/ec2-user/deploy-tmp'
-          strip_components: 2
-
-      - name: Upload public website to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: 'deploy/website/*.html'
-          target: '/home/ec2-user/deploy-tmp-site'
-          strip_components: 2
-
-      - name: Run with PM2
+      - name: Install and restart
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APP_AWS_ACCESS_KEY_ID: ${{ secrets.APP_AWS_ACCESS_KEY_ID }}
+          APP_AWS_SECRET_ACCESS_KEY: ${{ secrets.APP_AWS_SECRET_ACCESS_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DATABASE_URL,APP_AWS_ACCESS_KEY_ID,APP_AWS_SECRET_ACCESS_KEY,GEMINI_API_KEY
           script: |
             set -e
-            command -v nginx >/dev/null 2>&1 || sudo dnf install -y nginx
-            sudo systemctl enable --now nginx
-            sudo cp /home/ec2-user/deploy-tmp/newsbooktech.conf /etc/nginx/conf.d/newsbooktech.conf
-            rm -f /home/ec2-user/deploy-tmp/newsbooktech.conf
+            # Guard: never install an ARM binary on the old x86 server.
+            [ "$(uname -m)" = aarch64 ] || { echo "EC2_HOST is not the ARM server ($(uname -m))"; exit 1; }
 
-            sudo mkdir -p /var/www/newsbook-site
-            sudo cp /home/ec2-user/deploy-tmp-site/*.html /var/www/newsbook-site/
-            rm -rf /home/ec2-user/deploy-tmp-site
+            STAGE=/home/ec2-user/deploy-tmp/backend
+            rm -rf "$STAGE" && mkdir -p "$STAGE"
+            tar xzf /home/ec2-user/deploy-tmp/backend-bundle.tgz -C "$STAGE"
+            rm -f /home/ec2-user/deploy-tmp/backend-bundle.tgz
 
+            # Runtime config from GitHub secrets.
+            umask 077
+            {
+              echo "DATABASE_URL=$DATABASE_URL"
+              echo "AWS_ACCESS_KEY_ID=$APP_AWS_ACCESS_KEY_ID"
+              echo "AWS_SECRET_ACCESS_KEY=$APP_AWS_SECRET_ACCESS_KEY"
+              echo "AWS_S3_BUCKET=newsbook-data-hyd"
+              echo "AWS_REGION=ap-south-2"
+              echo "GEMINI_API_KEY=$GEMINI_API_KEY"
+            } > "$STAGE/backend.env"
+            sudo install -m 640 -o root -g ec2-user "$STAGE/backend.env" /etc/newsbook/backend.env
+            umask 022
+
+            # Public website + API reverse proxy.
+            sudo cp "$STAGE"/site/*.html /var/www/newsbook-site/
+            sudo cp "$STAGE/newsbooktech.conf" /etc/nginx/conf.d/newsbooktech.conf
             sudo nginx -t && sudo systemctl reload nginx
-
-            command -v certbot >/dev/null 2>&1 || {
-              sudo dnf install -y python3 augeas-libs
-              sudo python3 -m venv /opt/certbot
-              sudo /opt/certbot/bin/pip install --upgrade pip
-              sudo /opt/certbot/bin/pip install certbot certbot-nginx
-              sudo ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
-            }
             sudo certbot --nginx -n --agree-tos -m mohandiaries58@gmail.com \
-              -d newsbooktech.com -d www.newsbooktech.com --redirect
+              -d newsbooktech.com -d www.newsbooktech.com --redirect \
+              || echo "::warning::certbot failed - is newsbooktech.com pointing at this server yet?"
 
-            mkdir -p /home/ec2-user/newsbook-backend
-            mv /home/ec2-user/deploy-tmp/ecosystem.config.js /home/ec2-user/newsbook-backend/ecosystem.config.js
-            JAR=$(ls -t /home/ec2-user/deploy-tmp/*.jar | head -n1)
-            cp "$JAR" /home/ec2-user/newsbook-backend/app.jar
-            rm -f /home/ec2-user/deploy-tmp/*.jar
+            # Atomic binary swap, then restart.
+            install -m 755 "$STAGE/newsbook-backend" /home/ec2-user/newsbook-backend/newsbook-backend.new
+            mv /home/ec2-user/newsbook-backend/newsbook-backend.new /home/ec2-user/newsbook-backend/newsbook-backend
+            sudo cp "$STAGE/newsbook-backend.service" /etc/systemd/system/newsbook-backend.service
+            sudo systemctl daemon-reload
+            sudo systemctl enable newsbook-backend
+            rm -rf "$STAGE"
 
-            # One-time migration: Spring Boot 4's bundled H2 (2.4.240) uses a newer
-            # MVStore file format than the H2 (2.1.214) this app previously shipped with,
-            # so the existing data/newsbook.mv.db can't be opened as-is. Export it with the
-            # old driver and reimport with the new one before the app (re)starts.
-            DB_DIR="/home/ec2-user/newsbook-backend/data"
-            MARKER="$DB_DIR/.h2-migrated-2.4.240"
-            OLD_DB="$DB_DIR/newsbook.mv.db"
-            if [ -f "$OLD_DB" ] && [ ! -f "$MARKER" ]; then
-              echo "Migrating H2 data file to the Spring Boot 4 format..."
-              pm2 stop newsbook-backend || true
-              cd /home/ec2-user/newsbook-backend
-              [ -f h2-2.1.214.jar ] || curl -sL -o h2-2.1.214.jar https://repo1.maven.org/maven2/com/h2database/h2/2.1.214/h2-2.1.214.jar
-              [ -f h2-2.4.240.jar ] || curl -sL -o h2-2.4.240.jar https://repo1.maven.org/maven2/com/h2database/h2/2.4.240/h2-2.4.240.jar
-              java -cp h2-2.1.214.jar org.h2.tools.Script \
-                -url "jdbc:h2:file:$DB_DIR/newsbook;IFEXISTS=TRUE" -user sa -password "" \
-                -script "$DB_DIR/migration-backup.sql"
-              mv "$OLD_DB" "$DB_DIR/newsbook.mv.db.pre-boot4.bak"
-              rm -f "$DB_DIR/newsbook.trace.db" "$DB_DIR/newsbook.lock.db"
-              java -cp h2-2.4.240.jar org.h2.tools.RunScript \
-                -url "jdbc:h2:file:$DB_DIR/newsbook" -user sa -password "" \
-                -script "$DB_DIR/migration-backup.sql"
-              touch "$MARKER"
-              echo "H2 migration complete (old file kept as newsbook.mv.db.pre-boot4.bak)."
+            # Until the one-time data import has run (migrate workflow), starting the
+            # backend would seed an empty database and block the import.
+            if [ ! -f /etc/newsbook/.migrated ]; then
+              echo "::warning::Data not migrated yet - backend installed but not started."
+              exit 0
             fi
-
-            pm2 startOrRestart /home/ec2-user/newsbook-backend/ecosystem.config.js
-            pm2 save
-            sleep 2
-            pm2 status newsbook-backend
+            sudo systemctl restart newsbook-backend
+            curl -sf --retry 15 --retry-delay 1 --retry-connrefused -o /dev/null http://127.0.0.1:8080/api/tiles
+            systemctl --no-pager --lines=5 status newsbook-backend
 
   admin-web:
     needs: backend
@@ -154,37 +139,23 @@ jobs:
         working-directory: frontend-admin
         run: npm run build
 
-      - name: Upload build to EC2
+      - name: Package
+        run: |
+          mkdir -p bundle/dist
+          cp -r frontend-admin/dist/. bundle/dist/
+          cp deploy/nginx/admin-newsbooktech.conf bundle/
+          tar czf admin-bundle.tgz -C bundle .
+
+      - name: Upload to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: 'frontend-admin/dist/*'
-          target: '/home/ec2-user/deploy-tmp-admin'
-          strip_components: 2
+          source: admin-bundle.tgz
+          target: /home/ec2-user/deploy-tmp
 
-      - name: Upload ecosystem file to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: 'frontend-admin/ecosystem.config.js'
-          target: '/home/ec2-user/deploy-tmp-admin'
-          strip_components: 1
-
-      - name: Upload nginx config to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: 'deploy/nginx/admin-newsbooktech.conf'
-          target: '/home/ec2-user/deploy-tmp-admin'
-          strip_components: 2
-
-      - name: Run with PM2
+      - name: Publish
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -192,33 +163,17 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            command -v nginx >/dev/null 2>&1 || sudo dnf install -y nginx
-            sudo systemctl enable --now nginx
-            sudo cp /home/ec2-user/deploy-tmp-admin/admin-newsbooktech.conf /etc/nginx/conf.d/admin-newsbooktech.conf
-            rm -f /home/ec2-user/deploy-tmp-admin/admin-newsbooktech.conf
+            [ "$(uname -m)" = aarch64 ] || { echo "EC2_HOST is not the ARM server ($(uname -m))"; exit 1; }
+            STAGE=/home/ec2-user/deploy-tmp/admin
+            rm -rf "$STAGE" && mkdir -p "$STAGE"
+            tar xzf /home/ec2-user/deploy-tmp/admin-bundle.tgz -C "$STAGE"
+            rm -f /home/ec2-user/deploy-tmp/admin-bundle.tgz
+
+            # nginx serves the built files directly - no Node process on the server.
+            sudo rsync -a --delete "$STAGE/dist/" /var/www/newsbook-admin/
+            sudo cp "$STAGE/admin-newsbooktech.conf" /etc/nginx/conf.d/admin-newsbooktech.conf
             sudo nginx -t && sudo systemctl reload nginx
-
-            command -v certbot >/dev/null 2>&1 || {
-              sudo dnf install -y python3 augeas-libs
-              sudo python3 -m venv /opt/certbot
-              sudo /opt/certbot/bin/pip install --upgrade pip
-              sudo /opt/certbot/bin/pip install certbot certbot-nginx
-              sudo ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
-            }
             sudo certbot --nginx -n --agree-tos -m mohandiaries58@gmail.com \
-              -d admin.newsbooktech.com --redirect
-
-            command -v serve >/dev/null 2>&1 || sudo npm install -g serve
-
-            mkdir -p /home/ec2-user/newsbook-admin-web
-            mv /home/ec2-user/deploy-tmp-admin/ecosystem.config.js /home/ec2-user/newsbook-admin-web/ecosystem.config.js
-
-            rm -rf /home/ec2-user/newsbook-admin-web/dist
-            mkdir -p /home/ec2-user/newsbook-admin-web/dist
-            mv /home/ec2-user/deploy-tmp-admin/* /home/ec2-user/newsbook-admin-web/dist/
-            rm -rf /home/ec2-user/deploy-tmp-admin/*
-
-            pm2 startOrRestart /home/ec2-user/newsbook-admin-web/ecosystem.config.js
-            pm2 save
-            sleep 2
-            pm2 status newsbook-admin-web
+              -d admin.newsbooktech.com --redirect \
+              || echo "::warning::certbot failed - is admin.newsbooktech.com pointing at this server yet?"
+            rm -rf "$STAGE"

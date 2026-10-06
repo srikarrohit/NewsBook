@@ -1,0 +1,83 @@
+name: Migrate to RDS (one-time)
+
+# Moves production from the old Java server (H2 file database, photos on disk) to the
+# new ARM server (Rust backend, RDS MySQL, photos in the Hyderabad S3 bucket).
+# Run once, after the Deploy workflow has installed the backend on the new server.
+# See deploy/MIGRATION.md. The old server's H2 file is left untouched for rollback.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MIGRATE to confirm (the old backend is stopped during the move)'
+        required: true
+      old_host:
+        description: 'Old Java server'
+        default: '16.112.67.15'
+      new_host:
+        description: 'New ARM server (Elastic IP)'
+        default: '16.112.243.119'
+
+jobs:
+  migrate:
+    if: inputs.confirm == 'MIGRATE'
+    runs-on: ubuntu-latest
+    env:
+      OLD: ${{ secrets.EC2_USER }}@${{ inputs.old_host }}
+      NEW: ${{ secrets.EC2_USER }}@${{ inputs.new_host }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH key
+        run: |
+          install -d -m 700 ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed
+          chmod 600 ~/.ssh/id_ed
+          printf 'Host *\n  IdentityFile ~/.ssh/id_ed\n  StrictHostKeyChecking accept-new\n  ServerAliveInterval 30\n' > ~/.ssh/config
+
+      - name: New server is ready
+        run: |
+          ssh "$NEW" 'set -e
+            [ "$(uname -m)" = aarch64 ]
+            [ -x ~/newsbook-backend/newsbook-backend ] || { echo "Run the Deploy workflow first"; exit 1; }
+            [ ! -f /etc/newsbook/.migrated ] || { echo "Already migrated"; exit 1; }'
+
+      - name: Export from the old server (stops the Java backend)
+        run: |
+          ssh "$OLD" 'pm2 stop newsbook-backend'
+          ssh "$OLD" 'bash -s -- /home/ec2-user/newsbook-backend/h2-2.4.240.jar /home/ec2-user/newsbook-backend/data/newsbook /home/ec2-user/migration/h2-export' < deploy/export-h2-csv.sh
+          ssh "$OLD" 'set -e
+            mkdir -p ~/migration/images
+            [ -d ~/newsbook-backend/images ] && cp -a ~/newsbook-backend/images/. ~/migration/images/ || true
+            tar czf ~/migration.tgz -C ~ migration
+            ls -la ~/migration.tgz'
+          scp "$OLD:migration.tgz" migration.tgz
+
+      - name: Import into RDS and move photos to S3
+        run: |
+          # Photos that shipped inside the Java jar, in case old posts reference them.
+          tar czf legacy-images.tgz -C deploy legacy-images
+          scp migration.tgz legacy-images.tgz "$NEW:"
+          ssh "$NEW" 'set -e
+            rm -rf ~/migration ~/legacy-images
+            tar xzf ~/migration.tgz -C ~ && tar xzf ~/legacy-images.tgz -C ~
+            set -a; . /etc/newsbook/backend.env; set +a
+            cd ~/newsbook-backend
+            ./newsbook-backend import-h2-csv ~/migration/h2-export
+            ./newsbook-backend migrate-photos --from-bucket-url https://newsbook-data.s3.ap-southeast-2.amazonaws.com/ \
+              ~/migration/images ~/legacy-images
+            sudo touch /etc/newsbook/.migrated
+            sudo systemctl restart newsbook-backend
+            curl -sf --retry 15 --retry-delay 1 --retry-connrefused -o /dev/null http://127.0.0.1:8080/api/tiles
+            echo "Rust backend is serving the migrated data"'
+
+      - name: Send the old server's API traffic to the new server
+        # Until DNS (GoDaddy) points newsbooktech.com at the new server, the old nginx
+        # forwards API requests there, so nothing is lost while DNS propagates.
+        run: |
+          ssh "$OLD" "set -e
+            sudo cp /etc/nginx/conf.d/newsbooktech.conf /etc/nginx/conf.d/newsbooktech.conf.pre-migration
+            sudo sed -i 's#proxy_pass http://127.0.0.1:8080;#proxy_pass http://${{ inputs.new_host }};#' /etc/nginx/conf.d/newsbooktech.conf
+            sudo nginx -t && sudo systemctl reload nginx
+            curl -sf -o /dev/null -H 'Host: newsbooktech.com' http://127.0.0.1/api/tiles
+            echo 'Old server now forwards API traffic to the new server'"
