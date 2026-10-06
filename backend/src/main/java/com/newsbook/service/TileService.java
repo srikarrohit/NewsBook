@@ -7,14 +7,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class TileService {
     @Autowired
     private TileRepository tileRepository;
+
+    @Autowired
+    private S3StorageService s3StorageService;
 
     public List<TileDTO> getAllTiles() {
         return tileRepository.findAll().stream()
@@ -120,6 +125,18 @@ public class TileService {
 
     public void deleteTile(Long id) {
         tileRepository.deleteById(id);
+    }
+
+    /** S3 keys still in use as tile images - must survive the nightly orphaned-upload sweep. */
+    public Set<String> getActiveS3Keys() {
+        Set<String> keys = new HashSet<>();
+        for (Tile tile : tileRepository.findAll()) {
+            String imageKey = s3StorageService.keyFromUrl(tile.getImage());
+            if (imageKey != null) {
+                keys.add(imageKey);
+            }
+        }
+        return keys;
     }
 
     private TileDTO toDTO(Tile tile) {
