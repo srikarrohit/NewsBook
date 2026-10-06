@@ -78,15 +78,16 @@ jobs:
             tar xzf /home/ec2-user/deploy-tmp/backend-bundle.tgz -C "$STAGE"
             rm -f /home/ec2-user/deploy-tmp/backend-bundle.tgz
 
-            # Runtime config from GitHub secrets.
+            # Runtime config from GitHub secrets. Values are single-quoted so the file
+            # reads the same in systemd and when sourced by bash (DATABASE_URL has '&').
             umask 077
             {
-              echo "DATABASE_URL=$DATABASE_URL"
-              echo "AWS_ACCESS_KEY_ID=$APP_AWS_ACCESS_KEY_ID"
-              echo "AWS_SECRET_ACCESS_KEY=$APP_AWS_SECRET_ACCESS_KEY"
-              echo "AWS_S3_BUCKET=newsbook-data-hyd"
-              echo "AWS_REGION=ap-south-2"
-              echo "GEMINI_API_KEY=$GEMINI_API_KEY"
+              echo "DATABASE_URL='$DATABASE_URL'"
+              echo "AWS_ACCESS_KEY_ID='$APP_AWS_ACCESS_KEY_ID'"
+              echo "AWS_SECRET_ACCESS_KEY='$APP_AWS_SECRET_ACCESS_KEY'"
+              echo "AWS_S3_BUCKET='newsbook-data-hyd'"
+              echo "AWS_REGION='ap-south-2'"
+              echo "GEMINI_API_KEY='$GEMINI_API_KEY'"
             } > "$STAGE/backend.env"
             sudo install -m 640 -o root -g ec2-user "$STAGE/backend.env" /etc/newsbook/backend.env
             umask 022
